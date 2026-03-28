@@ -247,6 +247,41 @@ class Traceable:
     def tan(expr: Any) -> Self:
         expr = Traceable.wrap(expr)
         return Traceable(lambda: math.tan(expr()), f"tan({expr.name})", op="TAN", left=expr)
+    
+    def get_coefficients(self, var_name: str) -> List[float]:
+        """
+        Uses a system of linear equations to find coefficients for a polynomial.
+        If f(x) = a2*x^2 + a1*x + a0, it returns [a0, a1, a2].
+        """
+        deg = self.get_degree(var_name)
+        if deg == 0: return [float(self())]
+        
+        # We need deg + 1 points to solve for deg + 1 unknowns
+        # We'll pick x = 0, 1, 2, ..., deg
+        A_data = []
+        B_data = []
+        
+        canvas = Canvas.recent
+        sym = canvas.get_symbol(canvas.find_symbol(var_name))
+        original_val = sym.value
+        
+        for x_val in range(deg + 1):
+            # Row in matrix: [x^0, x^1, x^2, ..., x^deg]
+            row = [float(x_val**i) for i in range(deg + 1)]
+            A_data.append(row)
+            
+            # Resulting y value
+            sym.value = x_val
+            B_data.append([float(self())])
+            
+        sym.value = original_val # Restore canvas state
+        
+        # Solve the system to get [a0, a1, a2...]
+        A = Matrix(A_data)
+        B = Matrix(B_data)
+        coeffs = A.solve(B)
+        
+        return [row[0] for row in coeffs.data]
 
     def __add__(self, other: Union[Self, Any]) -> Self:
         other = Traceable.wrap(other)
@@ -814,6 +849,24 @@ class RegressionPower:
 
 class Solver:
     """A class to solve for a variable in an expression given a target value."""
+
+    @staticmethod
+    def get_auto_range(expr: Traceable, symbol: Symbol) -> Tuple[float, float]:
+        """Calculates a safe search range using Cauchy's Bound."""
+        try:
+            coeffs = expr.get_coefficients(symbol.name)
+            if len(coeffs) < 2: return (-10, 10)
+            
+            an = abs(coeffs[-1]) # Leading coefficient
+            max_ai = max(abs(c) for c in coeffs[:-1])
+            
+            # Cauchy's Bound: |x| < 1 + (max|ai| / |an|)
+            radius = 1 + (max_ai / an)
+            # Pad it slightly for safety
+            return (-(radius + 1), radius + 1)
+        except:
+            # Fallback for non-polynomials (Trig, etc.)
+            return (-50, 50)
     
     @staticmethod
     def solve(expr: Union[Expression, Function, Traceable, SymbolLike], 
@@ -880,9 +933,13 @@ class Solver:
     @staticmethod
     def find_extrema(expr: Union[Traceable, Function, SymbolLike], 
                      symbol: Symbol, 
-                     search_range: Tuple[float, float]) -> List[float]:
+                     search_range: Optional[Tuple[float, float]] = None) -> List[float]:
         
         t_expr = Traceable.wrap(expr)
+
+        if search_range is None:
+            search_range = Solver.get_auto_range(t_expr, symbol)
+
         deriv = t_expr.diff(symbol.name)
         
         # --- NEW: AUTO-COMPLEXITY ---
@@ -920,11 +977,14 @@ class Solver:
     def solve_all(expr: Union[Traceable, Function, SymbolLike], 
                   target: float, 
                   symbol: Symbol, 
-                  search_range: Tuple[float, float]) -> List[float]:
+                  search_range: Optional[Tuple[float, float]] = None) -> List[float]:
         """
         Partition the search range using extrema to find all real roots.
         """
         t_expr = Traceable.wrap(expr)
+
+        if search_range is None:
+            search_range = Solver.get_auto_range(t_expr, symbol)
         
         # 1. Find the "wiggles" (extrema)
         extrema = Solver.find_extrema(t_expr, symbol, search_range)
