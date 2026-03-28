@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "math-extention"
+version = "1.0.0"
+authors = [
+{ name="Neo Östlund Zetterberg", email="20091103neo@gmail.com" },
+]
+description = "A Hybrid Symbolic-Numeric Mathematics Engine"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+"Programming Language :: Python :: 3",
+"License :: OSI Approved :: MIT License",
+"Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/NeoZett-School/Math-Extention"
