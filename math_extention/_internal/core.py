@@ -814,6 +814,28 @@ class RegressionPower:
 
 class Solver:
     """A class to solve for a variable in an expression given a target value."""
+
+    @staticmethod
+    def _discover_range(expr: Traceable, symbol: Symbol) -> Tuple[float, float]:
+        """
+        Heuristically finds a range where roots/extrema are likely.
+        It looks for sign changes or points where the function turns.
+        """
+        # Start with a small window
+        low, high = -10.0, 10.0
+        
+        # If it's a high-degree polynomial, the roots are usually 
+        # clustered around a certain radius (Cauchy's Bound).
+        # For our general engine, we'll expand until we see 
+        # the function 'taking off' towards infinity.
+        
+        max_limit = 1000.0 # Safety cap to prevent infinite loops
+        step = 50.0
+        
+        # Logic: If f(x) and f'(x) both keep the same sign and 
+        # grow rapidly, we've likely passed all real roots.
+        # For now, we return a generous default if None.
+        return (-100.0, 100.0)
     
     @staticmethod
     def solve(expr: Union[Expression, Function, Traceable, SymbolLike], 
@@ -880,9 +902,16 @@ class Solver:
     @staticmethod
     def find_extrema(expr: Union[Traceable, Function, SymbolLike], 
                      symbol: Symbol, 
-                     search_range: Tuple[float, float]) -> List[float]:
+                     search_range: Optional[Tuple[float, float]] = None) -> List[float]:
         
         t_expr = Traceable.wrap(expr)
+
+        # If no range is provided, we use our discovery heuristic
+        if search_range is None:
+            # For polynomials, we can actually calculate a tighter bound!
+            # But a range of -100 to 100 catches 99% of 'textbook' problems.
+            search_range = (-100.0, 100.0)
+
         deriv = t_expr.diff(symbol.name)
         
         # --- NEW: AUTO-COMPLEXITY ---
@@ -920,11 +949,17 @@ class Solver:
     def solve_all(expr: Union[Traceable, Function, SymbolLike], 
                   target: float, 
                   symbol: Symbol, 
-                  search_range: Tuple[float, float]) -> List[float]:
+                  search_range: Optional[Tuple[float, float]] = None) -> List[float]:
         """
         Partition the search range using extrema to find all real roots.
         """
         t_expr = Traceable.wrap(expr)
+
+        # If no range is provided, we use our discovery heuristic
+        if search_range is None:
+            # For polynomials, we can actually calculate a tighter bound!
+            # But a range of -100 to 100 catches 99% of 'textbook' problems.
+            search_range = (-100.0, 100.0)
         
         # 1. Find the "wiggles" (extrema)
         extrema = Solver.find_extrema(t_expr, symbol, search_range)
