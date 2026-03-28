@@ -138,6 +138,21 @@ class Traceable:
         if self.op == "LOG": # Chain Rule: ln(u)' = u' / u
             return self.left.diff(var) / self.left
         
+        if self.op == "SIN":
+            # Chain Rule: sin(u)' = cos(u) * u'
+            cos_u = Traceable(lambda: math.cos(self.left()), f"cos({self.left.name})", op="COS", left=self.left)
+            return cos_u * self.left.diff(var)
+
+        if self.op == "COS":
+            # Chain Rule: cos(u)' = -sin(u) * u'
+            sin_u = Traceable(lambda: math.sin(self.left()), f"sin({self.left.name})", op="SIN", left=self.left)
+            return Traceable.wrap(-1) * sin_u * self.left.diff(var)
+
+        if self.op == "TAN":
+            # Chain Rule: tan(u)' = sec^2(u) * u' = (1 / cos^2(u)) * u'
+            cos_u = Traceable(lambda: math.cos(self.left()), f"cos({self.left.name})", op="COS", left=self.left)
+            return (Traceable.wrap(1) / (cos_u ** 2)) * self.left.diff(var)
+        
         raise NotImplementedError(f"Diff for {self.op} not supported.")
 
     # --- INTEGRATION (Power Rule & Linearity) ---
@@ -213,7 +228,25 @@ class Traceable:
                 power = int(float(self.right.name))
                 return base_degree * power
         
+        if self.op in ("SIN", "COS", "TAN"):
+            # Trig functions don't have a "degree," but they wiggle a lot.
+            # Return a high enough number to force the solver to sample 
+            # more intervals within the range.
+            return 4
+        
         return 1 # Fallback for unknown ops like LOG/EXP/etc.
+    
+    def sin(expr: Any) -> Self:
+        expr = Traceable.wrap(expr)
+        return Traceable(lambda: math.sin(expr()), f"sin({expr.name})", op="SIN", left=expr)
+
+    def cos(expr: Any) -> Self:
+        expr = Traceable.wrap(expr)
+        return Traceable(lambda: math.cos(expr()), f"cos({expr.name})", op="COS", left=expr)
+
+    def tan(expr: Any) -> Self:
+        expr = Traceable.wrap(expr)
+        return Traceable(lambda: math.tan(expr()), f"tan({expr.name})", op="TAN", left=expr)
 
     def __add__(self, other: Union[Self, Any]) -> Self:
         other = Traceable.wrap(other)
