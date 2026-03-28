@@ -1,0 +1,910 @@
+from typing import (
+    Union, Tuple, List, Dict, Optional, Callable, Generic, TypeVar, ClassVar, Self, Any
+)
+from collections import defaultdict
+import math
+
+VID = int
+
+T = TypeVar("T")
+T1 = TypeVar("T1")
+
+class Value:
+    """A class that represents a value in the canvas. It has a unique identifier (vid) and a value."""
+
+    __slots__ = ("value", "vid")
+
+    def __init__(self, value: Any) -> None:
+        self.value = value
+        self.vid = id(self)
+
+class Canvas(defaultdict[int, Value]):
+    """A class that represents a canvas. It is a dictionary that maps a unique identifier (vid) to a value."""
+
+    __slots__ = ("_symbols",)
+
+    recent: ClassVar[Optional[Self]] = None
+
+    def __init__(self) -> None:
+        """A class that represents a canvas. It is a dictionary that maps a unique identifier (vid) to a value."""
+        defaultdict.__init__(self, Value)
+        self._symbols = dict()
+        Canvas.recent = self
+    
+    @property
+    def symbols(self) -> List["Symbol"]:
+        """A helper method to get all symbols in the canvas as a list."""
+        return list(self._symbols.values())
+
+    def create_value(self, value: Any) -> VID:
+        v = Value(value)
+        self[v.vid] = v
+        return v.vid
+    
+    def get_name(self, vid: VID) -> Optional[str]:
+        symbol = self._symbols.get(vid)
+        return symbol.name if symbol else None
+    
+    def find_symbol(self, name: str) -> VID:
+        for vid, symbol in self._symbols.items():
+            if symbol.name == name:
+                return vid
+        return None
+    
+    def get_symbol(self, vid: VID) -> Optional["Symbol"]:
+        return self._symbols.get(vid)
+    
+    def clear_symbols(self) -> None: 
+        self._symbols.clear()
+
+class Traceable:
+    """A wrapper that builds a string representation and a dynamic callable."""
+    __slots__ = ("_func", "name", "op", "left", "right")
+
+    def __init__(self, func: Callable[[], Any], name: str, op: str = "CONST",
+                 left: Any = None, right: Any = None) -> None:
+        self._func = func  # This is the "live" math
+        self.name = name   # This is the "written" math
+        self.op = op
+        self.left = left
+        self.right = right
+
+    def __call__(self) -> Any:
+        return self._func()
+    
+    def calculate(self) -> Any:
+        """A helper method to explicitly calculate the value of the expression. It is equivalent to calling the object itself."""
+        return self()
+
+    @staticmethod
+    def wrap(other: Any) -> Self:
+        if isinstance(other, Traceable):
+            return other
+        
+        # If it's a Symbol, we need to decide if it's a variable or a constant/expression
+        if hasattr(other, 'value') and hasattr(other, 'name'):
+            val = other.value
+            # If the Symbol's value is a Function/Expression, wrap its internal callable
+            if hasattr(val, 'callable'):
+                return Traceable.wrap(val.callable)
+            if isinstance(val, Traceable):
+                return val
+            
+            # Otherwise, it's a standard variable (like 'x')
+            return Traceable(lambda: other.value, other.name, op="VAR")
+            
+        # If it's a Function or Expression class, grab its underlying callable
+        if hasattr(other, 'callable'):
+            return Traceable.wrap(other.callable)
+            
+        # Raw number
+        return Traceable(lambda: other, str(other), op="CONST")
+    
+    # --- DERIVATION ---
+    def diff(self, var: str) -> Self:
+        if self.op == "CONST": return Traceable.wrap(0)
+        if self.op == "VAR": return Traceable.wrap(1) if self.name == var else Traceable.wrap(0)
+        
+        if self.op == "+": return self.left.diff(var) + self.right.diff(var)
+        if self.op == "-": return self.left.diff(var) - self.right.diff(var)
+        
+        if self.op == "*": # Product Rule: f'g + fg'
+            return (self.left.diff(var) * self.right) + (self.left * self.right.diff(var))
+            
+        if self.op == "/": # Quotient Rule: (f'g - fg') / g^2
+            num = (self.left.diff(var) * self.right) - (self.left * self.right.diff(var))
+            return num / (self.right ** 2)
+
+        if self.op == "**": 
+            # Case 1: Power Rule (x^n)' = n * x^(n-1) * x'
+            if self.right.op == "CONST":
+                n = float(self.right.name)
+                return Traceable.wrap(n) * (self.left ** (n - 1)) * self.left.diff(var)
+            
+            # Case 2: Exponential Rule (a^u)' = a^u * ln(a) * u'
+            if self.left.op == "CONST":
+                a = float(self.left.name)
+                # We use our 'LOG' op here: ln(a)
+                ln_a = Traceable(lambda: math.log(a), f"ln({a})", op="LOG", left=self.left)
+                return self * ln_a * self.right.diff(var)
+
+            # Case 3: General Power Rule (f^g)' = f^g * (g' * ln(f) + g * f' / f)
+            # This covers cases like x^x
+            ln_f = Traceable(lambda: math.log(self.left()), f"ln({self.left.name})", op="LOG", left=self.left)
+            term1 = self.right.diff(var) * ln_f
+            term2 = self.right * (self.left.diff(var) / self.left)
+            return self * (term1 + term2)
+        
+        if self.op == "LOG": # Chain Rule: ln(u)' = u' / u
+            return self.left.diff(var) / self.left
+        
+        raise NotImplementedError(f"Diff for {self.op} not supported.")
+
+    # --- INTEGRATION (Power Rule & Linearity) ---
+    def integrate(self, var_obj: Any) -> Self:
+        # We need the name string for matching ops, but the object for wrapping
+        var_name = var_obj.name if hasattr(var_obj, 'name') else str(var_obj)
+        
+        if self.op == "CONST": 
+            # ∫ c dx = c * x
+            # Use wrap(var_obj) to ensure we get a lambda: x.value
+            return self * Traceable.wrap(var_obj)
+            
+        if self.op == "VAR": 
+            if self.name == var_name:
+                # ∫ x dx = (x^2) / 2
+                return (self ** 2) / 2
+            # ∫ y dx = y * x (Treating other variables as constants)
+            return self * Traceable.wrap(var_obj)
+
+        if self.op == "+": 
+            return self.left.integrate(var_obj) + self.right.integrate(var_obj)
+        
+        if self.op == "-": 
+            return self.left.integrate(var_obj) - self.right.integrate(var_obj)
+
+        if self.op == "*":
+            # Linear combination: ∫ c * f(x) dx = c * ∫ f(x) dx
+            if self.left.op == "CONST": 
+                return self.left * self.right.integrate(var_obj)
+            if self.right.op == "CONST":
+                return self.left.integrate(var_obj) * self.right
+            
+            # Note: Integration of f(x)*g(x) (Integration by Parts) is not 
+            # "quick and dirty" enough for a basic polynomial system.
+            raise NotImplementedError("General Product integration not supported.")
+
+        if self.op == "**": 
+            # Power Rule: ∫ x^n dx = x^(n+1) / (n+1)
+            if self.left.op == "VAR" and self.left.name == var_name and self.right.op == "CONST":
+                n = float(self.right.name)
+                return (self.left ** (n + 1)) / (n + 1)
+        
+        if self.op == "LOG":
+            if self.left.op == "VAR" and self.left.name == var_name:
+                # ∫ ln(x) dx = x*ln(x) - x
+                return (self.left * self) - self.left
+
+        raise NotImplementedError(f"Integration for operator '{self.op}' not supported.")
+
+    def __add__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: self() + other(), 
+            f"({self.name} + {other.name})",
+            "+", self, other
+        )
+    
+    def __radd__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: other() + self(), 
+            f"({other.name} + {self.name})",
+            "+", other, self
+        )
+
+    def __mul__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: self() * other(), 
+            f"({self.name} * {other.name})",
+            "*", self, other
+        )
+    
+    def __rmul__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: other() * self(), 
+            f"({other.name} * {self.name})",
+            "*", other, self
+        )
+    
+    def __sub__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: self() - other(), 
+            f"({self.name} - {other.name})",
+            "-", self, other
+        )
+    
+    def __rsub__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: other() + self(), 
+            f"({other.name} + {self.name})",
+            "-", other, self
+        )
+    
+    def __truediv__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: self() / other(), 
+            f"({self.name} / {other.name})",
+            "/", self, other
+        )
+    
+    def __rtruediv__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: other() / self(), 
+            f"({other.name} / {self.name})",
+            "/", other, self
+        )
+    
+    def __pow__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: self() ** other(), 
+            f"({self.name} ** {other.name})",
+            "**", self, other
+        )
+    
+    def __rpow__(self, other: Union[Self, Any]) -> Self:
+        other = Traceable.wrap(other)
+        return Traceable(
+            lambda: other() ** self(), 
+            f"({other.name} ** {self.name})",
+            "**", other, self
+        )
+
+    def __repr__(self) -> str:
+        return self.name
+
+class Symbol(tuple[str, int]):
+    """A class that represents a symbol in the canvas. It has a unique identifier (vid) and a name."""
+
+    def __new__(cls, name: str, value: Any = 0, canvas: Optional[Canvas] = None) -> Self:
+        """A class that represents a symbol in the canvas. It has a unique identifier (vid) and a name."""
+        canvas = canvas or Canvas.recent
+        self = super().__new__(cls, (name, canvas.create_value(value)))
+        canvas._symbols[self[1]] = self
+        self._canvas = canvas
+        return self
+    
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        """If a symbols value is callable (as in a Function), calling the symbol will call its value. This allows you to use symbols as functions without needing to access their value directly."""
+        if callable(self.value):
+            return self.value(*args, **kwargs)
+    
+    @property
+    def written(self) -> Optional[str]:
+        """A helper method to get the string representation of the symbol. It returns None if the symbol is not traceable or a expression."""
+        val = self.value
+        if isinstance(val, Traceable):
+            return val.name
+        if hasattr(val, 'written'):
+            return val.written
+    
+    @property
+    def name(self) -> str:
+        return self[0]
+    
+    @property
+    def value(self) -> Any:
+        return self._canvas[self[1]].value
+    
+    @value.setter
+    def value(self, new_value: Any) -> None:
+        self._canvas[self[1]].value = new_value
+    
+    def __add__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(self) + other
+    def __radd__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(other) + self
+
+    def __sub__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(self) - other
+    def __rsub__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(other) - self
+
+    def __mul__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(self) * other
+    def __rmul__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(other) * self
+
+    def __truediv__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(self) / other
+    def __rtruediv__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(other) / self
+
+    def __pow__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(self) ** other
+    def __rpow__(self, other: Self) -> Traceable: 
+        return Traceable.wrap(other) ** self
+    
+    def create_reference(self) -> "Reference":
+        return Reference(self.name, self._canvas[self[1]])
+
+class Reference:
+    """An absolute reference to a symbol in the canvas. It has a value and a name."""
+
+    __slots__ = ("name", "object", "value")
+
+    def __init__(self, name: Optional[str], object: Union[Value, Any]) -> None:
+        self.name = name
+        self.object = object if isinstance(object, Value) else None
+        self.value = object.value if isinstance(object, Value) else object
+    
+    @property
+    def vid(self) -> Optional[VID]:
+        return self.object.vid if self.object is not None else None
+
+class Expression(Generic[T1]):
+    """A class that represents an expression in the canvas. It is a callable object that takes a canvas as an argument and returns a value.
+    
+    The expression can be built from a Traceable object or a simple callable. If it is built from a Traceable object, it will have a string 
+    representation that can be accessed through the `written` property. If it is built from a simple callable, the `written` property will 
+    return None. You can build a traceable object by simply using the operators on your symbols, or by using the Traceable class directly. 
+    The expression will not be evaluated directly, but only when you call this object. This allows you to build complex expressions without 
+    worrying about the order of evaluation or the state of the canvas at the time of building the expression."""
+
+    __slots__ = ("_canvas", "callable",)
+
+    def __init__(self, func: Union[Callable[[], T1], Traceable], canvas: Optional[Canvas] = None) -> None:
+        self._canvas = canvas or Canvas.recent
+        self.callable = func
+    
+    @property
+    def written(self) -> Optional[str]:
+        """A helper method to get the string representation of the expression. It returns None if the expression is not traceable."""
+        return self.callable.name if isinstance(self.callable, Traceable) else None
+    
+    def calculate(self) -> T1:
+        """A helper method to explicitly calculate the value of the expression. It is equivalent to calling the object itself."""
+        return self.callable()
+    
+    def __call__(self) -> T1:
+        return self.callable()
+
+SymbolLike = Union[str, Symbol, Reference, VID]
+
+def get_symbol(canvas: Canvas, symbol_like: SymbolLike) -> Optional[Symbol]:
+    """A helper function that takes a symbol-like object and returns the corresponding symbol from the canvas. It can take a string (name), a Symbol object, a Reference object, or a VID (integer)."""
+
+    if isinstance(symbol_like, str):
+        return canvas.get_symbol(canvas.find_symbol(symbol_like))
+    elif isinstance(symbol_like, Symbol):
+        return symbol_like
+    elif isinstance(symbol_like, Reference):
+        return canvas.get_symbol(symbol_like.vid)
+    elif isinstance(symbol_like, int):
+        return canvas.get_symbol(symbol_like)
+    else:
+        return None
+
+class Function(Generic[T, T1], Expression[T1]):
+    """A class that represents a function in the canvas. It is a callable object that takes a canvas as an argument and returns a value."""
+
+    __slots__ = ("symbol",)
+
+    def __init__(self, symbol: SymbolLike, func: Union[Callable[[], T1], Traceable], canvas: Optional[Canvas] = None) -> None:
+        Expression.__init__(self, func, canvas)
+        self.symbol = get_symbol(self._canvas, symbol)
+    
+    @property
+    def name(self) -> Optional[str]:
+        return self.symbol.name if self.symbol else None
+    
+    def calculate(self, value: T) -> T1:
+        self.symbol.value = value
+        return self.callable()
+    
+    def __call__(self, value: T) -> T1:
+        self.symbol.value = value
+        return self.callable()
+    
+    def derivative(self, value: float, h: float = 1e-5) -> float:
+        """Calculates the numerical derivative at a specific point."""
+        return (self(value + h) - self(value)) / h
+
+    def integral(self, start: float, end: float, steps: int = 1000) -> float:
+        """Calculates the definite integral using the Trapezoidal Rule."""
+        dx = (end - start) / steps
+        total = 0.5 * (self(start) + self(end))
+        for i in range(1, steps):
+            total += self(start + i * dx)
+        return total * dx
+    
+    def get_derivative(self) -> Self:
+        """Returns a new Function that is the derivative of this one."""
+        if not isinstance(self.callable, Traceable):
+            raise ValueError("Function must be Traceable for symbolic calculus.")
+        deriv = self.callable.diff(self.symbol.name)
+        return Function(self.symbol, deriv, self._canvas)
+
+    def get_integral(self) -> Self:
+        """Returns a new Function that is the indefinite integral (Primitive)."""
+        if not isinstance(self.callable, Traceable):
+            raise ValueError("Function must be Traceable for symbolic calculus.")
+        # FIX: Pass the object self.symbol, not self.symbol.name
+        integ_traceable = self.callable.integrate(self.symbol)
+        return Function(self.symbol, integ_traceable, self._canvas)
+
+Point = Tuple[float, float]
+Points = List[Point]
+
+class Matrix:
+    __slots__ = ("rows", "cols", "data")
+
+    def __init__(self, data: List[List[float]]) -> None:
+        self.data = data
+        self.rows = len(data)
+        self.cols = len(data[0]) if self.rows > 0 else 0
+
+    @classmethod
+    def zeros(cls, rows: int, cols: int) -> "Matrix":
+        return cls([[0.0 for _ in range(cols)] for _ in range(rows)])
+
+    @classmethod
+    def identity(cls, n: int) -> "Matrix":
+        m = cls.zeros(n, n)
+        for i in range(n): m.data[i][i] = 1.0
+        return m
+
+    def __mul__(self, other: Union["Matrix", float]) -> "Matrix":
+        if isinstance(other, (int, float)):
+            return Matrix([[cell * other for cell in row] for row in self.data])
+        
+        # Matrix Multiplication
+        result = Matrix.zeros(self.rows, other.cols)
+        for i in range(self.rows):
+            for j in range(other.cols):
+                result.data[i][j] = sum(self.data[i][k] * other.data[k][j] for k in range(self.cols))
+        return result
+
+    def transpose(self) -> "Matrix":
+        return Matrix([[self.data[j][i] for j in range(self.rows)] for i in range(self.cols)])
+
+    def inverse(self) -> "Matrix":
+        """Gauss-Jordan elimination to find the inverse."""
+        if self.rows != self.cols: raise ValueError("Only square matrices can be inverted.")
+        n = self.rows
+        aug = [row + [1.0 if i == j else 0.0 for j in range(n)] for i, row in enumerate(self.data)]
+
+        for i in range(n):
+            pivot = aug[i][i]
+            if pivot == 0: raise ValueError("Matrix is singular and cannot be inverted.")
+            for j in range(i, 2 * n): aug[i][j] /= pivot
+            for k in range(n):
+                if k != i:
+                    factor = aug[k][i]
+                    for j in range(i, 2 * n): aug[k][j] -= factor * aug[i][j]
+
+        return Matrix([row[n:] for row in aug])
+    
+    def det(self) -> float:
+        """Calculates the determinant using Gaussian elimination."""
+        if self.rows != self.cols:
+            raise ValueError("Determinant only exists for square matrices.")
+        
+        n = self.rows
+        # Copy data to avoid mutating the original matrix
+        mat = [row[:] for row in self.data]
+        det_val = 1.0
+
+        for i in range(n):
+            # Pivot selection
+            pivot_row = i
+            while pivot_row < n and mat[pivot_row][i] == 0:
+                pivot_row += 1
+            
+            if pivot_row == n:
+                return 0.0 # Matrix is singular
+            
+            if pivot_row != i:
+                mat[i], mat[pivot_row] = mat[pivot_row], mat[i]
+                det_val *= -1.0 # Swapping rows flips the sign
+            
+            pivot = mat[i][i]
+            det_val *= pivot
+            
+            for k in range(i + 1, n):
+                factor = mat[k][i] / pivot
+                for j in range(i + 1, n):
+                    mat[k][j] -= factor * mat[i][j]
+                    
+        return det_val
+    
+    def solve(self, B: "Matrix") -> "Matrix":
+        """Solves AX = B using Gaussian Elimination with Partial Pivoting."""
+        if self.rows != self.cols:
+            raise ValueError("Matrix must be square to solve AX = B.")
+        if self.rows != B.rows:
+            raise ValueError("Dimension mismatch between A and B.")
+
+        n = self.rows
+        # Create an augmented matrix [A | B]
+        A_data = [row[:] for row in self.data]
+        B_data = [row[:] for row in B.data]
+        
+        # Forward Elimination
+        for i in range(n):
+            # Pivot selection (find the largest element in the column for stability)
+            max_row = i
+            for k in range(i + 1, n):
+                if abs(A_data[k][i]) > abs(A_data[max_row][i]):
+                    max_row = k
+            
+            # Swap rows in A and B
+            A_data[i], A_data[max_row] = A_data[max_row], A_data[i]
+            B_data[i], B_data[max_row] = B_data[max_row], B_data[i]
+
+            pivot = A_data[i][i]
+            if abs(pivot) < 1e-12:
+                raise ValueError("Matrix is singular or near-singular.")
+
+            # Eliminate other rows
+            for k in range(i + 1, n):
+                factor = A_data[k][i] / pivot
+                for j in range(i, n):
+                    A_data[k][j] -= factor * A_data[i][j]
+                for j in range(B.cols):
+                    B_data[k][j] -= factor * B_data[i][j]
+
+        # Back Substitution
+        X_data = [[0.0 for _ in range(B.cols)] for _ in range(n)]
+        for i in range(n - 1, -1, -1):
+            for j in range(B.cols):
+                sum_val = sum(A_data[i][k] * X_data[k][j] for k in range(i + 1, n))
+                X_data[i][j] = (B_data[i][j] - sum_val) / A_data[i][i]
+
+        return Matrix(X_data)
+
+class RegressionLin:
+    """A class that represents a regression. It is a callable object that takes a list of points as an argument and returns a value."""
+
+    __slots__ = ("points",)
+
+    def __init__(self, points: Points) -> None:
+        self.points = points
+    
+    def __call__(self) -> Tuple[float, float]:
+        n = len(self.points)
+        if n == 0:
+            return (0.0, 0.0)
+        sum_x = sum(point[0] for point in self.points)
+        sum_y = sum(point[1] for point in self.points)
+        sum_xx = sum(point[0] ** 2 for point in self.points)
+        sum_xy = sum(point[0] * point[1] for point in self.points)
+        slope = (n * sum_xy - sum_x * sum_y) / (n * sum_xx - sum_x ** 2)
+        intercept = (sum_y - slope * sum_x) / n
+        return (slope, intercept)
+    
+    def calculate(self) -> Tuple[float, float]:
+        return self()
+    
+    def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
+        slope, intercept = self()
+        canvas = canvas or Canvas.recent
+        sym = get_symbol(canvas, symbol)
+
+        # This looks like math, but it's actually building the Traceable object!
+        # sym is converted to Traceable automatically by our __mul__ override
+        expr = sym * slope + intercept
+
+        return Function(sym, expr, canvas)
+    
+class RegressionPoly:
+    """Handles Polynomial Regression of a specified degree."""
+
+    __slots__ = ("points", "degree")
+
+    def __init__(self, points: Points, degree: int = 2) -> None:
+        self.points = points
+        self.degree = degree
+
+    def __call__(self) -> List[float]:
+        """Returns the coefficients [a0, a1, a2...] using Least Squares."""
+        X_data = [[x**i for i in range(self.degree + 1)] for x, _ in self.points]
+        Y_data = [[y] for _, y in self.points]
+
+        X = Matrix(X_data)
+        Y = Matrix(Y_data)
+        XT = X.transpose()
+
+        # Solve the Normal Equation: (XT * X) * coeffs = (XT * Y)
+        A = XT * X
+        B = XT * Y
+        
+        coeffs = A.solve(B)
+        return [row[0] for row in coeffs.data]
+    
+    def calculate(self) -> Tuple[float, float]:
+        return self()
+
+    def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
+        coeffs = self()
+        canvas = canvas or Canvas.recent
+        sym = get_symbol(canvas, symbol)
+        
+        # Build the Traceable expression: a0 + a1*x + a2*x^2 ...
+        expr = Traceable.wrap(coeffs[0])
+        for i in range(1, len(coeffs)):
+            expr = expr + (Traceable.wrap(coeffs[i]) * (sym ** i))
+            
+        return Function(sym, expr, canvas)
+
+class RegressionExp:
+    """Handles Exponential Regression y = a * b^x."""
+
+    __slots__ = ("points",)
+
+    def __init__(self, points: Points) -> None:
+        # Note: y-values must be > 0 for log transformation
+        self.points = [(x, y) for x, y in points if y > 0]
+
+    def __call__(self) -> Tuple[float, float]:
+        """Returns (a, b) for the formula y = a * b^x."""
+        # 1. Transform points to (x, ln(y))
+        log_points = [(x, math.log(y)) for x, y in self.points]
+        
+        # 2. Use your existing Linear Regression on the transformed data
+        lin_reg = RegressionLin(log_points)
+        slope, intercept = lin_reg()
+        
+        # 3. Transform coefficients back
+        a = math.exp(intercept)
+        b = math.exp(slope)
+        return (a, b)
+    
+    def calculate(self) -> Tuple[float, float]:
+        return self()
+
+    def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
+        a, b = self()
+        canvas = canvas or Canvas.recent
+        sym = get_symbol(canvas, symbol)
+        
+        # Formula: a * (b ** x)
+        expr = Traceable.wrap(a) * (Traceable.wrap(b) ** sym)
+        return Function(sym, expr, canvas)
+
+class RegressionLog:
+    """Handles Logarithmic Regression y = a + b * ln(x)."""
+
+    __slots__ = ("points",)
+
+    def __init__(self, points: Points) -> None:
+        # x-values must be > 0
+        self.points = [(x, y) for x, y in points if x > 0]
+
+    def __call__(self) -> Tuple[float, float]:
+        """Returns (a, b) for the formula y = a + b * ln(x)."""
+        # 1. Transform points to (ln(x), y)
+        log_x_points = [(math.log(x), y) for x, y in self.points]
+        
+        # 2. Use Linear Regression: y = intercept + slope * ln(x)
+        lin_reg = RegressionLin(log_x_points)
+        slope, intercept = lin_reg()
+        
+        # intercept is 'a', slope is 'b'
+        return (intercept, slope)
+    
+    def calculate(self) -> Tuple[float, float]:
+        return self()
+
+    def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
+        a, b = self()
+        canvas = canvas or Canvas.recent
+        sym = get_symbol(canvas, symbol)
+        
+        # Since we don't have a 'log' operator in Traceable yet, 
+        # let's add a quick way to handle it or use a lambda.
+        # For now, let's add 'log' support to Traceable for a better 'written' property.
+        
+        # We can build it using a custom Traceable if we want it "Traceable"
+        log_sym = Traceable(lambda: math.log(sym.value), f"ln({sym.name})", op="LOG", left=sym)
+        expr = Traceable.wrap(a) + (Traceable.wrap(b) * log_sym)
+        
+        return Function(sym, expr, canvas)
+
+class RegressionPower:
+    """Handles Power Regression y = a * x^b."""
+
+    __slots__ = ("points",)
+
+    def __init__(self, points: Points) -> None:
+        # Both x and y must be > 0
+        self.points = [(x, y) for x, y in points if x > 0 and y > 0]
+
+    def __call__(self) -> Tuple[float, float]:
+        """Returns (a, b) for y = a * x^b."""
+        # Transform to (ln(x), ln(y))
+        log_log_points = [(math.log(x), math.log(y)) for x, y in self.points]
+        
+        lin_reg = RegressionLin(log_log_points)
+        slope, intercept = lin_reg()
+        
+        a = math.exp(intercept)
+        b = slope
+        return (a, b)
+    
+    def calculate(self) -> Tuple[float, float]:
+        return self()
+
+    def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
+        a, b = self()
+        canvas = canvas or Canvas.recent
+        sym = get_symbol(canvas, symbol)
+        
+        # Formula: a * (x ** b)
+        expr = Traceable.wrap(a) * (sym ** b)
+        return Function(sym, expr, canvas)
+
+class Solver:
+    """A class to solve for a variable in an expression given a target value."""
+    
+    @staticmethod
+    def solve(expr: Union[Expression, Function, Traceable, SymbolLike], 
+              target: float, 
+              symbol: Symbol, 
+              guess: float = 1.0, 
+              tol: float = 1e-7, 
+              max_iter: int = 100,
+              canvas: Optional[Canvas] = None) -> float:
+        """Uses Newton's Method to find 'symbol' such that 'expr' == 'target'."""
+        canvas = canvas or Canvas.recent
+    
+        # 1. Resolve 'expr' to its underlying math
+        if isinstance(expr, Symbol):
+            # If the symbol holds a Function or Traceable, solve THAT.
+            # Otherwise, we are trying to solve 'x = target', which is trivial.
+            actual_val = expr.value
+            if isinstance(actual_val, (Function, Expression, Traceable)):
+                t_expr = Traceable.wrap(actual_val)
+            else:
+                # It's a raw variable symbol like 'x'
+                t_expr = Traceable.wrap(expr)
+        elif isinstance(expr, (Function, Expression)):
+            t_expr = expr.callable
+        else:
+            t_expr = Traceable.wrap(expr)
+            
+        if not isinstance(t_expr, Traceable):
+            raise ValueError("Expression must be Traceable to solve symbolically.")
+
+        # g(x) = expr - target (we want g(x) = 0)
+        shifted_expr = t_expr - target
+        # g'(x)
+        derivative = shifted_expr.diff(symbol.name)
+        
+        current_x = guess
+        
+        for _ in range(max_iter):
+            symbol.value = current_x
+            
+            f_val = shifted_expr()
+            df_val = derivative()
+
+            # Recursively call if the result is still a Traceable (unlikely but safe)
+            while hasattr(f_val, '__call__') and isinstance(f_val, Traceable):
+                f_val = f_val()
+            while hasattr(df_val, '__call__') and isinstance(df_val, Traceable):
+                df_val = df_val()
+            
+            # Cast to float to ensure abs() works
+            f_val, df_val = float(f_val), float(df_val)
+            
+            if abs(df_val) < 1e-12: 
+                break
+                
+            next_x = current_x - (f_val / df_val)
+            if abs(next_x - current_x) < tol:
+                return next_x
+            
+            current_x = next_x
+            
+        return current_x
+
+def fix_symbol_list(symbols: List[SymbolLike], canvas: Optional[Canvas] = None) -> List[Symbol]:
+    """A helper function to convert a list of symbol-like objects into a list of Symbol objects."""
+
+    canvas = canvas or Canvas.recent
+    fixed_symbols = []
+    for sym in symbols:
+        if isinstance(sym, Symbol):
+            fixed_symbols.append(sym)
+        else:
+            fixed_symbols.append(get_symbol(canvas, sym))
+    return fixed_symbols
+
+class SystemSolver:
+    """Solves systems of linear equations using the Matrix class."""
+
+    @staticmethod
+    def solve_linear(equations: List[Traceable], symbols: List[Symbol]) -> Dict[str, float]:
+        """
+        Solves a linear system. 
+        Example: 
+           2x + 3y = 8
+           4x - y = 2
+        """
+        n = len(symbols)
+        if len(equations) != n:
+            raise ValueError("Number of equations must match number of symbols.")
+
+        # Build Matrix A (coefficients) and Matrix B (constants)
+        A_data = []
+        B_data = []
+
+        for eq in equations:
+            row = []
+            # To get the coefficient of a symbol in a linear eq:
+            # The coefficient of 'x' is the derivative of the expression with respect to 'x'
+            for sym in symbols:
+                coeff = eq.diff(sym.name).calculate()
+                row.append(float(coeff))
+            
+            A_data.append(row)
+            
+            # The constant term is -(eq evaluated at all symbols = 0)
+            # Save original values
+            originals = [s.value for s in symbols]
+            for s in symbols: s.value = 0
+            constant = -eq.calculate()
+            B_data.append([float(constant)])
+            
+            # Restore values
+            for i, s in enumerate(symbols): s.value = originals[i]
+
+        A = Matrix(A_data)
+        B = Matrix(B_data)
+        solution = A.solve(B)
+
+        return {symbols[i].name: solution.data[i][0] for i in range(n)}
+    
+    @staticmethod
+    def solve_nonlinear(equations: List[Traceable], symbols: List[Symbol], 
+                        guesses: List[float], max_iter: int = 50, tol: float = 1e-7) -> Dict[str, float]:
+        """Solves F(x) = 0 using the Multi-variable Newton Method."""
+        n = len(symbols)
+        current_vals = list(guesses)
+
+        for _ in range(max_iter):
+            # Set current values in canvas
+            for i, s in enumerate(symbols): s.value = current_vals[i]
+
+            # 1. Calculate Function Matrix F
+            f_vec = Matrix([[eq.calculate()] for eq in equations])
+            
+            # 2. Calculate Jacobian Matrix J
+            j_data = []
+            for eq in equations:
+                row = [eq.diff(s.name).calculate() for s in symbols]
+                j_data.append(row)
+            J = Matrix(j_data)
+
+            # 3. Solve J * delta = -F
+            minus_F = f_vec * -1.0
+            delta = J.solve(minus_F)
+
+            # 4. Update
+            new_vals = [current_vals[i] + delta.data[i][0] for i in range(n)]
+            
+            # Check convergence
+            if sum(abs(d[0]) for d in delta.data) < tol:
+                return {symbols[i].name: new_vals[i] for i in range(n)}
+            
+            current_vals = new_vals
+
+        return {symbols[i].name: current_vals[i] for i in range(n)}
