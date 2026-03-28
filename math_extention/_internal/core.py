@@ -666,6 +666,20 @@ class Matrix:
 
         return Matrix(X_data)
 
+def calculate_r_squared(points: Points, model_func: Callable[[float], float]) -> float:
+    """Calculates the R^2 value for a given set of points and a model."""
+    y_values = [p[1] for p in points]
+    y_mean = sum(y_values) / len(y_values)
+    
+    # Total Sum of Squares (Variance from the mean)
+    ss_tot = sum((y - y_mean) ** 2 for y in y_values)
+    
+    # Residual Sum of Squares (Variance from our model)
+    ss_res = sum((p[1] - model_func(p[0])) ** 2 for p in points)
+    
+    if ss_tot == 0: return 1.0 # Avoid division by zero for constant data
+    return 1 - (ss_res / ss_tot)
+
 class RegressionLin:
     """A class that represents a regression. It is a callable object that takes a list of points as an argument and returns a value."""
 
@@ -688,6 +702,14 @@ class RegressionLin:
     
     def calculate(self) -> Tuple[float, float]:
         return self()
+    
+    def r_squared(self) -> float:
+        coeffs = self()
+        def model(x):
+            # Evaluate: a0 + a1*x + a2*x^2 ...
+            return sum(coeffs[i] * (x ** i) for i in range(len(coeffs)))
+        
+        return calculate_r_squared(self.points, model)
     
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         slope, intercept = self()
@@ -727,6 +749,14 @@ class RegressionPoly:
     
     def calculate(self) -> Tuple[float, float]:
         return self()
+    
+    def r_squared(self) -> float:
+        coeffs = self()
+        def model(x):
+            # Evaluate: a0 + a1*x + a2*x^2 ...
+            return sum(coeffs[i] * (x ** i) for i in range(len(coeffs)))
+        
+        return calculate_r_squared(self.points, model)
 
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         coeffs = self()
@@ -765,6 +795,14 @@ class RegressionExp:
     
     def calculate(self) -> Tuple[float, float]:
         return self()
+    
+    def r_squared(self) -> float:
+        coeffs = self()
+        def model(x):
+            # Evaluate: a0 + a1*x + a2*x^2 ...
+            return sum(coeffs[i] * (x ** i) for i in range(len(coeffs)))
+        
+        return calculate_r_squared(self.points, model)
 
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         a, b = self()
@@ -798,6 +836,14 @@ class RegressionLog:
     
     def calculate(self) -> Tuple[float, float]:
         return self()
+    
+    def r_squared(self) -> float:
+        coeffs = self()
+        def model(x):
+            # Evaluate: a0 + a1*x + a2*x^2 ...
+            return sum(coeffs[i] * (x ** i) for i in range(len(coeffs)))
+        
+        return calculate_r_squared(self.points, model)
 
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         a, b = self()
@@ -837,6 +883,14 @@ class RegressionPower:
     
     def calculate(self) -> Tuple[float, float]:
         return self()
+    
+    def r_squared(self) -> float:
+        coeffs = self()
+        def model(x):
+            # Evaluate: a0 + a1*x + a2*x^2 ...
+            return sum(coeffs[i] * (x ** i) for i in range(len(coeffs)))
+        
+        return calculate_r_squared(self.points, model)
 
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         a, b = self()
@@ -881,6 +935,14 @@ class RegressionMultiple:
     
     def calculate(self) -> Tuple[float, float]:
         return self()
+    
+    def r_squared(self) -> float:
+        coeffs = self()
+        def model(x):
+            # Evaluate: a0 + a1*x + a2*x^2 ...
+            return sum(coeffs[i] * (x ** i) for i in range(len(coeffs)))
+        
+        return calculate_r_squared(self.points, model)
 
     def create_function(self, symbols: List[Symbol], canvas: Optional[Canvas] = None) -> Function[float, float]:
         if len(symbols) != self.num_vars:
