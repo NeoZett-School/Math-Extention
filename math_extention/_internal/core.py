@@ -186,6 +186,34 @@ class Traceable:
                 return (self.left * self) - self.left
 
         raise NotImplementedError(f"Integration for operator '{self.op}' not supported.")
+    
+    def get_degree(self, var: str) -> int:
+        """Recursively finds the highest power of the given variable."""
+        if self.op == "CONST": 
+            return 0
+        if self.op == "VAR": 
+            return 1 if self.name == var else 0
+        
+        if self.op in ("+", "-"):
+            return max(self.left.get_degree(var), self.right.get_degree(var))
+        
+        if self.op == "*":
+            # x * x = x^2, so we add degrees for multiplication
+            return self.left.get_degree(var) + self.right.get_degree(var)
+            
+        if self.op == "/":
+            # For simplicity, we handle polynomials. 
+            # If dividing by x, the degree technically drops, but we'll stick to numerator.
+            return self.left.get_degree(var)
+
+        if self.op == "**":
+            if self.right.op == "CONST":
+                # (x^2)^3 = x^6, so we multiply degrees
+                base_degree = self.left.get_degree(var)
+                power = int(float(self.right.name))
+                return base_degree * power
+        
+        return 1 # Fallback for unknown ops like LOG/EXP/etc.
 
     def __add__(self, other: Union[Self, Any]) -> Self:
         other = Traceable.wrap(other)
@@ -815,6 +843,86 @@ class Solver:
             current_x = next_x
             
         return current_x
+    
+    @staticmethod
+    def find_extrema(expr: Union[Traceable, Function, SymbolLike], 
+                     symbol: Symbol, 
+                     search_range: Tuple[float, float]) -> List[float]:
+        
+        t_expr = Traceable.wrap(expr)
+        deriv = t_expr.diff(symbol.name)
+        
+        # --- NEW: AUTO-COMPLEXITY ---
+        deg = t_expr.get_degree(symbol.name)
+        # We need at least (degree - 1) intervals to find all extrema, 
+        # but multiplying by 5 gives us a safety buffer for narrow curves.
+        intervals = max(10, deg * 5) 
+        
+        extrema = []
+        start, end = search_range
+        step = (end - start) / intervals
+        
+        for i in range(intervals):
+            x_left = start + i * step
+            x_right = x_left + step
+            
+            # Check for a sign change in the derivative (Bracketing)
+            symbol.value = x_left
+            val_l = deriv()
+            symbol.value = x_right
+            val_r = deriv()
+            
+            # Use float() to ensure we aren't comparing Traceables
+            if float(val_l) * float(val_r) <= 0:
+                guess = (x_left + x_right) / 2
+                root = Solver.solve(deriv, target=0, symbol=symbol, guess=guess)
+                
+                if start - 1e-5 <= root <= end + 1e-5:
+                    if not any(abs(root - e) < 1e-4 for e in extrema):
+                        extrema.append(round(root, 6))
+        
+        return sorted(extrema)
+
+    @staticmethod
+    def solve_all(expr: Union[Traceable, Function, SymbolLike], 
+                  target: float, 
+                  symbol: Symbol, 
+                  search_range: Tuple[float, float]) -> List[float]:
+        """
+        Partition the search range using extrema to find all real roots.
+        """
+        t_expr = Traceable.wrap(expr)
+        
+        # 1. Find the "wiggles" (extrema)
+        extrema = Solver.find_extrema(t_expr, symbol, search_range)
+        
+        # 2. Create partitions: [start, ext1, ext2, ..., end]
+        partitions = [search_range[0]] + extrema + [search_range[1]]
+        
+        roots = []
+        for i in range(len(partitions) - 1):
+            x_left, x_right = partitions[i], partitions[i+1]
+            
+            # Check if the target is even reachable in this interval
+            symbol.value = x_left
+            y_left = t_expr() - target
+            symbol.value = x_right
+            y_right = t_expr() - target
+            
+            # Bracketing: If the function crosses the target value
+            if float(y_left) * float(y_right) <= 0:
+                # Use midpoint as the starting guess for Newton's Method
+                guess = (x_left + x_right) / 2
+                root = Solver.solve(t_expr, target, symbol, guess=guess)
+                
+                # Verify and add unique root
+                if not any(abs(root - r) < 1e-4 for r in roots):
+                    # Final check: Does it actually solve the equation?
+                    symbol.value = root
+                    if abs(float(t_expr()) - target) < 1e-5:
+                        roots.append(round(root, 6))
+        
+        return sorted(roots)
 
 def fix_symbol_list(symbols: List[SymbolLike], canvas: Optional[Canvas] = None) -> List[Symbol]:
     """A helper function to convert a list of symbol-like objects into a list of Symbol objects."""
