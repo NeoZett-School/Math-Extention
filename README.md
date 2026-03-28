@@ -1,4 +1,4 @@
-# Math-Extention
+# Math-Extension
 **A Hybrid Symbolic-Numeric Mathematics Engine for Python.**
 
 `Math-Extention` is a powerful library designed to bridge the gap between simple numerical calculators and complex symbolic engines. By using a **Traceable** architecture, it remembers how a formula was built, allowing for automatic differentiation, multi-variable systems solving, and advanced regression—all while maintaining high-speed numerical performance through a custom Matrix core.

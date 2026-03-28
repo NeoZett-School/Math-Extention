@@ -1,4 +1,4 @@
-from math_extention import Canvas, Symbol, RegressionPoly
+from math_extension import Canvas, Symbol, RegressionPoly
 
 canvas = Canvas()
 x = Symbol('x')
