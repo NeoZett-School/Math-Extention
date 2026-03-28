@@ -847,6 +847,58 @@ class RegressionPower:
         expr = Traceable.wrap(a) * (sym ** b)
         return Function(sym, expr, canvas)
 
+class RegressionMultiple:
+    """
+    Handles Multiple Linear Regression: y = b0 + b1*x1 + b2*x2 + ... + bn*xn
+    Points format: [([x1, x2, ...], y), ...]
+    """
+
+    __slots__ = ("data_points", "num_vars")
+
+    def __init__(self, data_points: List[Tuple[List[float], float]]) -> None:
+        self.data_points = data_points
+        self.num_vars = len(data_points[0][0]) if data_points else 0
+
+    def __call__(self) -> List[float]:
+        """Returns the coefficients [b0, b1, b2, ... bn]."""
+        # 1. Build Design Matrix X (add a column of 1s for the intercept b0)
+        X_rows = []
+        Y_rows = []
+        for inputs, output in self.data_points:
+            X_rows.append([1.0] + list(inputs))
+            Y_rows.append([output])
+
+        X = Matrix(X_rows)
+        Y = Matrix(Y_rows)
+        XT = X.transpose()
+
+        # 2. Solve Normal Equation: (XT * X) * B = (XT * Y)
+        A = XT * X
+        B_vec = XT * Y
+        
+        coeffs = A.solve(B_vec)
+        return [row[0] for row in coeffs.data]
+    
+    def calculate(self) -> Tuple[float, float]:
+        return self()
+
+    def create_function(self, symbols: List[Symbol], canvas: Optional[Canvas] = None) -> Function[float, float]:
+        if len(symbols) != self.num_vars:
+            raise ValueError(f"Expected {self.num_vars} symbols, got {len(symbols)}")
+            
+        coeffs = self()
+        canvas = canvas or Canvas.recent
+        
+        # Start with the intercept b0
+        expr = Traceable.wrap(coeffs[0])
+        
+        # Add b1*x1 + b2*x2 + ...
+        for i in range(self.num_vars):
+            expr = expr + (Traceable.wrap(coeffs[i+1]) * symbols[i])
+            
+        # Note: Multiple regression returns a scalar, but depends on a list of symbols
+        return Function(symbols, expr, canvas)
+
 class Solver:
     """A class to solve for a variable in an expression given a target value."""
 

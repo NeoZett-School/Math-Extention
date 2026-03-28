@@ -4,7 +4,8 @@ from ._internal.core import (
     get_symbol, Function, Point, Points, 
     Matrix, RegressionLin, RegressionPoly, 
     RegressionExp, RegressionLog, RegressionPower, 
-    Solver, fix_symbol_list, SystemSolver
+    RegressionMultiple, Solver, fix_symbol_list, 
+    SystemSolver
 )
 
 __all__ = (
@@ -13,5 +14,6 @@ __all__ = (
     "get_symbol", "Function", "Point", "Points", 
     "Matrix", "RegressionLin", "RegressionPoly", 
     "RegressionExp", "RegressionLog", "RegressionPower", 
-    "Solver", "fix_symbol_list", "SystemSolver"
+    "RegressionMultiple", "Solver", "fix_symbol_list", 
+    "SystemSolver"
 )
