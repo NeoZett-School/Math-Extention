@@ -20,7 +20,7 @@ To use this in your project, clone the repository:
 git clone https://github.com/NeoZett-School/Math-Extension.git
 ```
 
-We also have a pypi page. You can download this package using:
+We also have a pypi page [here](https://pypi.org/project/py-math-ext/#description). You can download this package using:
 
 ```batch
 pip install py-math-ext
