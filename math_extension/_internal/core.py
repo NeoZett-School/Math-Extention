@@ -236,17 +236,30 @@ class Traceable:
         
         return 1 # Fallback for unknown ops like LOG/EXP/etc.
     
+    @staticmethod
     def sin(expr: Any) -> Self:
         expr = Traceable.wrap(expr)
         return Traceable(lambda: math.sin(expr()), f"sin({expr.name})", op="SIN", left=expr)
 
+    @staticmethod
     def cos(expr: Any) -> Self:
         expr = Traceable.wrap(expr)
         return Traceable(lambda: math.cos(expr()), f"cos({expr.name})", op="COS", left=expr)
 
+    @staticmethod
     def tan(expr: Any) -> Self:
         expr = Traceable.wrap(expr)
         return Traceable(lambda: math.tan(expr()), f"tan({expr.name})", op="TAN", left=expr)
+    
+    @staticmethod
+    def log(expr: Any, base: int = ...) -> Self:
+        expr = Traceable.wrap(expr)
+        return Traceable(lambda: math.log(expr(), base), f"ln({expr.name})", op="LOG", left=expr)
+    
+    @staticmethod
+    def exp(expr: Any) -> Self:
+        expr = Traceable.wrap(expr)
+        return Traceable(lambda: math.exp(expr()), f"exp({expr.name})", op="EXP", left=expr)
     
     def get_coefficients(self, var_name: str) -> List[float]:
         """
