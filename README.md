@@ -1,7 +1,7 @@
 # Math-Extension
 **A Hybrid Symbolic-Numeric Mathematics Engine for Python.**
 
-`Math-Extention` is a powerful library designed to bridge the gap between simple numerical calculators and complex symbolic engines. By using a **Traceable** architecture, it remembers how a formula was built, allowing for automatic differentiation, multi-variable systems solving, and advanced regression—all while maintaining high-speed numerical performance through a custom Matrix core.
+`Math-Extension` is a powerful library designed to bridge the gap between simple numerical calculators and complex symbolic engines. By using a **Traceable** architecture, it remembers how a formula was built, allowing for automatic differentiation, multi-variable systems solving, and advanced regression—all while maintaining high-speed numerical performance through a custom Matrix core.
 
 ## 🚀 Key Features
 * **Symbolic Traceability**: Every operation is stored in a tree, allowing for `f.diff(x)` (Recursive Automatic Differentiation).
@@ -17,7 +17,7 @@
 To use this in your project, clone the repository:
 
 ```batch
-git clone https://github.com/NeoZett-School/Math-Extention.git
+git clone https://github.com/NeoZett-School/Math-Extension.git
 ```
 
 We also have a pypi page. You can download this package using:
@@ -34,7 +34,7 @@ pip install py-math-ext
 Solve for the roots of a cubic function. The solver automatically detects the degree (3) and sets the search range using Cauchy's Bound.
 
 ```python
-from math_extention import Canvas, Symbol, Function, Solver
+from math_extension import Canvas, Symbol, Function, Solver
 
 canvas = Canvas()
 x = Symbol('x')
@@ -50,7 +50,7 @@ print(f"Roots of {f.written}: {roots}")
 Find the intersection points of a unit circle and a diagonal line.
 
 ```python
-from math_extention import Canvas, Symbol, RegressionPoly
+from math_extension import Canvas, Symbol, RegressionPoly
 
 canvas = Canvas()
 
@@ -67,7 +67,7 @@ print(f"Intersection Point: {result}")
 Fit a polynomial to data and verify the accuracy of the model.
 
 ```python
-from math_extention import Canvas, Symbol, RegressionPoly
+from math_extension import Canvas, Symbol, RegressionPoly
 
 canvas = Canvas()
 x = Symbol("x")
