@@ -53,16 +53,14 @@ Find the intersection points of a unit circle and a diagonal line.
 from math_extention import Canvas, Symbol, RegressionPoly
 
 canvas = Canvas()
-x = Symbol("x")
 
-data = [(0, 1), (1, 2.1), (2, 3.9), (3, 9.2)]
-reg = RegressionPoly(data, degree=2)
+x, y = Symbol('x'), Symbol('y')
+eq1 = x**2 + y**2 - 1  # Unit Circle equation
+eq2 = y - x            # Line y = x
 
-coeffs = reg.calculate() # Returns [a0, a1, a2]
-accuracy = reg.r_squared() # Returns the Coefficient of Determination
-
-print(f"Model: {reg.create_function('x').written}")
-print(f"R^2 Accuracy: {accuracy:.4f}")
+# Uses the multi-variable Newton-Raphson method
+result = SystemSolver.solve_nonlinear([eq1, eq2], [x, y], guesses=[0.5, 0.5])
+print(f"Intersection Point: {result}")
 ```
 
 ### 3. Data Regression & Goodness of Fit ($R^2$)
