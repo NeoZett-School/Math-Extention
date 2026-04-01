@@ -1,6 +1,7 @@
 # I am not sure what exactly is neccessary to ignore, but this is a good start.
 
 __pycache__
+pypi_upload.bat
 
 pycache/
 *.py[cod]

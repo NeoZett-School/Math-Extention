@@ -21,15 +21,21 @@ class Value:
 class Canvas(defaultdict[int, Value]):
     """A class that represents a canvas. It is a dictionary that maps a unique identifier (vid) to a value."""
 
-    __slots__ = ("_symbols",)
+    __slots__ = ("_symbols", "_thread_safe")
 
     recent: ClassVar[Optional[Self]] = None
 
-    def __init__(self) -> None:
+    def __init__(self, thread_safe: bool = False) -> None:
         """A class that represents a canvas. It is a dictionary that maps a unique identifier (vid) to a value."""
         defaultdict.__init__(self, Value)
         self._symbols = dict()
-        Canvas.recent = self
+
+        self._thread_safe = thread_safe 
+        # In order to be completely thread_safe, it is required 
+        # that the user provides this canvas to symbols, functions, etc.
+
+        if not thread_safe:
+            Canvas.recent = self
     
     @property
     def symbols(self) -> List["Symbol"]:
@@ -59,6 +65,7 @@ class Canvas(defaultdict[int, Value]):
 
 class Traceable:
     """A wrapper that builds a string representation and a dynamic callable."""
+
     __slots__ = ("_func", "name", "op", "left", "right")
 
     def __init__(self, func: Callable[[], Any], name: str, op: str = "CONST",
@@ -489,7 +496,6 @@ SymbolLike = Union[str, Symbol, Reference, VID]
 
 def get_symbol(canvas: Canvas, symbol_like: SymbolLike) -> Optional[Symbol]:
     """A helper function that takes a symbol-like object and returns the corresponding symbol from the canvas. It can take a string (name), a Symbol object, a Reference object, or a VID (integer)."""
-
     if isinstance(symbol_like, str):
         return canvas.get_symbol(canvas.find_symbol(symbol_like))
     elif isinstance(symbol_like, Symbol):
@@ -862,14 +868,8 @@ class RegressionLog:
         a, b = self()
         canvas = canvas or Canvas.recent
         sym = get_symbol(canvas, symbol)
-        
-        # Since we don't have a 'log' operator in Traceable yet, 
-        # let's add a quick way to handle it or use a lambda.
-        # For now, let's add 'log' support to Traceable for a better 'written' property.
-        
-        # We can build it using a custom Traceable if we want it "Traceable"
-        log_sym = Traceable(lambda: math.log(sym.value), f"ln({sym.name})", op="LOG", left=sym)
-        expr = Traceable.wrap(a) + (Traceable.wrap(b) * log_sym)
+
+        expr = Traceable.wrap(a) + (Traceable.wrap(b) * Traceable.log(sym))
         
         return Function(sym, expr, canvas)
 
