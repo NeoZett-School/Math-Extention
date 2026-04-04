@@ -103,7 +103,7 @@ The `Matrix` class handles the heavy lifting for regressions and system solving.
 - [x] Trigonometric support (`sin`, `cos`, `tan`).
 - [x] Automatic Complexity (Degree) Detection.
 - [x] Multiple Linear Regression.
-- [x] Imaginary Numbers
+- [x] Imaginary Numbers (further development is in progress...)
 - [ ] String Parser (LaTeX String, presumably)
 - [ ] Unit Tests
 - [ ] LaTeX String Exporting for documentation.
