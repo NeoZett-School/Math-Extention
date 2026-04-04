@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "py-math-ext"
-version = "1.0.4"
+version = "1.0.5"
 authors = [
 { name="Neo Östlund Zetterberg", email="20091103neo@gmail.com" },
 ]
