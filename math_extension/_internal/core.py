@@ -1417,3 +1417,6 @@ class Equation:
 
     def solve_all(self, symbol: Symbol):
         return Solver.solve_all(self.to_zero(), 0, symbol)
+
+def parse(expr: str) -> Union[Traceable, Equation]:
+    """A simple parser to convert a string like '2*x + 3 = 8' into an equation or traceable."""

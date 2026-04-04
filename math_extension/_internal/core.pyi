@@ -2,6 +2,7 @@ from typing import (
     Union, Tuple, List, Dict, Optional, Callable, Generic, TypeVar, ClassVar, Self, Any
 )
 from collections import defaultdict
+from warnings import deprecated
 
 VID = int
 
@@ -244,3 +245,6 @@ class Equation:
     def to_zero(self) -> Traceable: ...
     def solve(self, symbol: Symbol, guess: float = 1.0): ...
     def solve_all(self, symbol: Symbol): ...
+
+@deprecated("The 'parse' method is not yet fully implemented but is intended to convert a string expression into an Equation or Traceable object. It will be added in a future update.")
+def parse(expr: str) -> Union[Traceable, Equation]: ...
