@@ -283,6 +283,65 @@ class Traceable:
         
         return [row[0] for row in coeffs.data]
     
+    def simplify(self) -> Self:
+        if self.op in ("CONST", "VAR"):
+            return self
+
+        left = self.left.simplify() if isinstance(self.left, Traceable) else self.left
+        right = self.right.simplify() if isinstance(self.right, Traceable) else self.right
+
+        # Addition
+        if self.op == "+":
+            if left.op == "CONST" and float(left.name) == 0:
+                return right
+            if right.op == "CONST" and float(right.name) == 0:
+                return left
+            if left.name == right.name:
+                return Traceable.wrap(2) * left
+            return left + right
+
+        # Subtraction
+        if self.op == "-":
+            if right.op == "CONST" and float(right.name) == 0:
+                return left
+            if left.name == right.name:
+                return Traceable.wrap(0)
+            return left - right
+
+        # Multiplication
+        if self.op == "*":
+            if left.op == "CONST":
+                val = float(left.name)
+                if val == 0: return left
+                if val == 1: return right
+            if right.op == "CONST":
+                val = float(right.name)
+                if val == 0: return right
+                if val == 1: return left
+            return left * right
+
+        # Division
+        if self.op == "/":
+            if right.op == "CONST" and float(right.name) == 1:
+                return left
+            return left / right
+
+        # Power
+        if self.op == "**":
+            if right.op == "CONST":
+                val = float(right.name)
+                if val == 1: return left
+                if val == 0: return Traceable.wrap(1)
+            return left ** right
+
+        return Traceable(
+            self._func,
+            self.name,
+            self.op,
+            left,
+            right
+        )
+    
     @classmethod
     def sin(cls, expr: Any) -> Self:
         expr = Traceable.wrap(expr)
