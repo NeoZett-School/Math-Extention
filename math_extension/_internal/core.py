@@ -70,8 +70,8 @@ class Traceable:
 
     def __init__(self, func: Callable[[], Any], name: str, op: str = "CONST",
                  left: Any = None, right: Any = None) -> None:
-        self._func = func  # This is the "live" cmath
-        self.name = name   # This is the "written" cmath
+        self._func = func  # This is the "live" math
+        self.name = name   # This is the "written" math
         self.op = op
         self.left = left
         self.right = right
