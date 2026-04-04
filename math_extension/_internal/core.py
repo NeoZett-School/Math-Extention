@@ -352,7 +352,7 @@ class Traceable:
             left=expr
         )
 
-    @staticmethod
+    @classmethod
     def cos(cls, expr: Any) -> Self:
         expr = Traceable.wrap(expr)
         return cls(
