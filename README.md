@@ -103,6 +103,8 @@ The `Matrix` class handles the heavy lifting for regressions and system solving.
 - [x] Trigonometric support (`sin`, `cos`, `tan`).
 - [x] Automatic Complexity (Degree) Detection.
 - [x] Multiple Linear Regression.
+- [ ] Unit Tests
+- [ ] Imaginary Numbers
 - [ ] LaTeX String Exporting for documentation.
 - [ ] Residual Analysis Plotting.
 

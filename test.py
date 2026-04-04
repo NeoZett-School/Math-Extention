@@ -1,3 +1,5 @@
+# Smoke Test
+
 from math_extension import Canvas, Symbol, RegressionPoly
 
 canvas = Canvas()
