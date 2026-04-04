@@ -373,14 +373,22 @@ class Traceable:
         )
     
     @classmethod
-    def log(cls, expr: Any, base: int = ...) -> Self:
+    def log(cls, expr: Any, base: Optional[float] = None) -> Self:
         expr = Traceable.wrap(expr)
-        return cls(
-            lambda: _smart_math_func(math.log, cmath.log, expr(), base), 
-            f"ln({expr.name})", 
-            op="LOG", 
-            left=expr
-        )
+        if base is None:
+            return cls(
+                lambda: _smart_math_func(math.log, cmath.log, expr()), 
+                f"ln({expr.name})", 
+                op="LOG", 
+                left=expr
+            )
+        else:
+            return cls(
+                lambda: _smart_math_func(math.log, cmath.log, expr(), base), 
+                f"log_{base}({expr.name})", 
+                op="LOG", 
+                left=expr
+            )
     
     @classmethod
     def exp(cls, expr: Any) -> Self:
@@ -473,8 +481,8 @@ class Traceable:
     def __rsub__(self, other: Union[Self, Any]) -> Self:
         other = Traceable.wrap(other)
         return Traceable(
-            lambda: other() + self(), 
-            f"({other.name} + {self.name})",
+            lambda: other() - self(), 
+            f"({other.name} - {self.name})",
             "-", other, self
         )
     
