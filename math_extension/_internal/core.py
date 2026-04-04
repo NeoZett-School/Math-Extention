@@ -509,6 +509,9 @@ class Traceable:
             f"({other.name} ** {self.name})",
             "**", other, self
         )
+    
+    def __neg__(self) -> Self:
+        return Traceable.wrap(-1) * self
 
     def __repr__(self) -> str:
         return self.name
@@ -574,6 +577,9 @@ class Symbol(tuple[str, int]):
         return Traceable.wrap(self) ** other
     def __rpow__(self, other: Self) -> Traceable: 
         return Traceable.wrap(other) ** self
+    
+    def __neg__(self) -> Traceable:
+        return -Traceable.wrap(self)
     
     def create_reference(self) -> "Reference":
         return Reference(self.name, self._canvas[self[1]])
@@ -671,7 +677,7 @@ class Function(Generic[T, T1], Expression[T1]):
         """Returns a new Function that is the derivative of this one."""
         if not isinstance(self.callable, Traceable):
             raise ValueError("Function must be Traceable for symbolic calculus.")
-        deriv = self.callable.diff(self.symbol.name)
+        deriv = self.callable.diff(self.symbol.name).simplify()
         return Function(self.symbol, deriv, self._canvas)
 
     def get_integral(self) -> Self:
@@ -679,7 +685,7 @@ class Function(Generic[T, T1], Expression[T1]):
         if not isinstance(self.callable, Traceable):
             raise ValueError("Function must be Traceable for symbolic calculus.")
         # FIX: Pass the object self.symbol, not self.symbol.name
-        integ_traceable = self.callable.integrate(self.symbol)
+        integ_traceable = self.callable.integrate(self.symbol).simplify()
         return Function(self.symbol, integ_traceable, self._canvas)
 
 Point = Tuple[float, float]
@@ -1395,3 +1401,19 @@ class SystemSolver:
             current_vals = new_vals
 
         return {symbols[i].name: current_vals[i] for i in range(n)}
+
+class Equation:
+    __slots__ = ("left", "right")
+
+    def __init__(self, left: Any, right: Any) -> None:
+        self.left = Traceable.wrap(left)
+        self.right = Traceable.wrap(right)
+
+    def to_zero(self) -> Traceable:
+        return self.left - self.right
+
+    def solve(self, symbol: Symbol, guess: float = 1.0):
+        return Solver.solve(self.to_zero(), 0, symbol, guess)
+
+    def solve_all(self, symbol: Symbol):
+        return Solver.solve_all(self.to_zero(), 0, symbol)
