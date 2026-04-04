@@ -248,8 +248,8 @@ class Traceable:
         
         return 1 # Fallback for unknown ops like LOG/EXP/etc.
     
-    @staticmethod
-    def sin(expr: Any) -> Self:
+    @classmethod
+    def sin(cls, expr: Any) -> Self:
         expr = Traceable.wrap(expr)
         return Traceable(
             lambda: _smart_math_func(math.sin, cmath.sin, expr()), 
@@ -259,42 +259,62 @@ class Traceable:
         )
 
     @staticmethod
-    def cos(expr: Any) -> Self:
+    def cos(cls, expr: Any) -> Self:
         expr = Traceable.wrap(expr)
-        return Traceable(
+        return cls(
             lambda: _smart_math_func(math.cos, cmath.cos, expr()), 
             f"cos({expr.name})", 
             op="COS", 
             left=expr
         )
 
-    @staticmethod
-    def tan(expr: Any) -> Self:
+    @classmethod
+    def tan(cls, expr: Any) -> Self:
         expr = Traceable.wrap(expr)
-        return Traceable(
+        return cls(
             lambda: _smart_math_func(math.tan, cmath.tan, expr()), 
             f"tan({expr.name})", 
             op="TAN", 
             left=expr
         )
     
-    @staticmethod
-    def log(expr: Any, base: int = ...) -> Self:
+    @classmethod
+    def log(cls, expr: Any, base: int = ...) -> Self:
         expr = Traceable.wrap(expr)
-        return Traceable(
+        return cls(
             lambda: _smart_math_func(math.log, cmath.log, expr(), base), 
             f"ln({expr.name})", 
             op="LOG", 
             left=expr
         )
     
-    @staticmethod
-    def exp(expr: Any) -> Self:
+    @classmethod
+    def exp(cls, expr: Any) -> Self:
         expr = Traceable.wrap(expr)
         return Traceable(
             lambda: _smart_math_func(math.exp, cmath.exp, expr()), 
             f"exp({expr.name})", 
             op="EXP", 
+            left=expr
+        )
+    
+    @classmethod
+    def conjugate(cls, expr: Any) -> Self:
+        expr = Traceable.wrap(expr)
+        return cls(
+            lambda: expr().conjugate(),
+            f"conj({expr.name})",
+            op="CONJ",
+            left=expr
+        )
+
+    @classmethod
+    def abs(cls, expr: Any) -> Self:
+        expr = Traceable.wrap(expr)
+        return cls(
+            lambda: abs(expr()),
+            f"|{expr.name}|",
+            op="ABS",
             left=expr
         )
     
