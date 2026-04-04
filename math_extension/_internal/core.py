@@ -616,10 +616,12 @@ class Function(Generic[T, T1], Expression[T1]):
 Point = Tuple[float, float]
 Points = List[Point]
 
+Number = Union[float, complex]
+
 class Matrix:
     __slots__ = ("rows", "cols", "data")
 
-    def __init__(self, data: List[List[float]]) -> None:
+    def __init__(self, data: List[List[Number]]) -> None:
         self.data = data
         self.rows = len(data)
         self.cols = len(data[0]) if self.rows > 0 else 0

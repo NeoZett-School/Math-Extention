@@ -127,11 +127,13 @@ class Function(Generic[T, T1], Expression[T1]):
 Point = Tuple[float, float]
 Points = List[Point]
 
+Number = Union[float, complex]
+
 class Matrix:
-    data: List[List[float]]
+    data: List[List[Number]]
     rows: int
     cols: int
-    def __init__(self, data: List[List[float]]) -> None: ...
+    def __init__(self, data: List[List[Number]]) -> None: ...
     @classmethod
     def zeros(cls, rows: int, cols: int) -> "Matrix": ...
     @classmethod

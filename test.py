@@ -4,6 +4,7 @@ from math_extension import Canvas, Symbol, Solver
 
 canvas = Canvas()
 x = Symbol('x')
+i = Symbol('i', 1j)
 
 expr = x**2 + 1
 
