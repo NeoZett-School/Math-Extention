@@ -248,6 +248,41 @@ class Traceable:
         
         return 1 # Fallback for unknown ops like LOG/EXP/etc.
     
+    def get_coefficients(self, var_name: str) -> List[float]:
+        """
+        Uses a system of linear equations to find coefficients for a polynomial.
+        If f(x) = a2*x^2 + a1*x + a0, it returns [a0, a1, a2].
+        """
+        deg = self.get_degree(var_name)
+        if deg == 0: return [float(self())]
+        
+        # We need deg + 1 points to solve for deg + 1 unknowns
+        # We'll pick x = 0, 1, 2, ..., deg
+        A_data = []
+        B_data = []
+        
+        canvas = Canvas.recent
+        sym = canvas.get_symbol(canvas.find_symbol(var_name))
+        original_val = sym.value
+        
+        for x_val in range(deg + 1):
+            # Row in matrix: [x^0, x^1, x^2, ..., x^deg]
+            row = [float(x_val**i) for i in range(deg + 1)]
+            A_data.append(row)
+            
+            # Resulting y value
+            sym.value = x_val
+            B_data.append([float(self())])
+            
+        sym.value = original_val # Restore canvas state
+        
+        # Solve the system to get [a0, a1, a2...]
+        A = Matrix(A_data)
+        B = Matrix(B_data)
+        coeffs = A.solve(B)
+        
+        return [row[0] for row in coeffs.data]
+    
     @classmethod
     def sin(cls, expr: Any) -> Self:
         expr = Traceable.wrap(expr)
@@ -318,40 +353,13 @@ class Traceable:
             left=expr
         )
     
-    def get_coefficients(self, var_name: str) -> List[float]:
-        """
-        Uses a system of linear equations to find coefficients for a polynomial.
-        If f(x) = a2*x^2 + a1*x + a0, it returns [a0, a1, a2].
-        """
-        deg = self.get_degree(var_name)
-        if deg == 0: return [float(self())]
-        
-        # We need deg + 1 points to solve for deg + 1 unknowns
-        # We'll pick x = 0, 1, 2, ..., deg
-        A_data = []
-        B_data = []
-        
-        canvas = Canvas.recent
-        sym = canvas.get_symbol(canvas.find_symbol(var_name))
-        original_val = sym.value
-        
-        for x_val in range(deg + 1):
-            # Row in matrix: [x^0, x^1, x^2, ..., x^deg]
-            row = [float(x_val**i) for i in range(deg + 1)]
-            A_data.append(row)
-            
-            # Resulting y value
-            sym.value = x_val
-            B_data.append([float(self())])
-            
-        sym.value = original_val # Restore canvas state
-        
-        # Solve the system to get [a0, a1, a2...]
-        A = Matrix(A_data)
-        B = Matrix(B_data)
-        coeffs = A.solve(B)
-        
-        return [row[0] for row in coeffs.data]
+    @property
+    def real(self) -> float:
+        return self().real
+    
+    @property
+    def imag(self) -> float:
+        return self().imag
 
     def __add__(self, other: Union[Self, Any]) -> Self:
         other = Traceable.wrap(other)
