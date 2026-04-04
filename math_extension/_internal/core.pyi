@@ -210,6 +210,14 @@ class Solver:
                   target: float, 
                   symbol: Symbol, 
                   search_range: Optional[Tuple[float, float]] = None) -> List[float]: ...
+    
+    @staticmethod
+    def solve_complex(expr: Union[Traceable, Function, SymbolLike], 
+                      target: float, 
+                      symbol: Symbol, 
+                      guess: Union[float, complex] = 1+1j,
+                      tol: float = 1e-10, 
+                      max_iter: int = 100) -> complex: ...
 
 def fix_symbol_list(symbols: List[SymbolLike], canvas: Optional[Canvas] = None) -> List[Symbol]: ...
 

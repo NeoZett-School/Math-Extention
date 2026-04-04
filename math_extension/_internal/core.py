@@ -1193,6 +1193,36 @@ class Solver:
                         roots.append(round(root, 6))
         
         return sorted(roots)
+    
+    @staticmethod
+    def solve_complex(expr: Union[Traceable, Function, SymbolLike], 
+                      target: float, 
+                      symbol: Symbol, 
+                      guess: Union[float, complex] = 1+1j,
+                      tol: float = 1e-10, 
+                      max_iter: int = 100) -> complex:
+        t_expr = Traceable.wrap(expr)
+        shifted = t_expr - target
+        deriv = shifted.diff(symbol.name)
+
+        z = complex(guess)
+
+        for _ in range(max_iter):
+            symbol.value = z
+            fz = shifted()
+            dfz = deriv()
+
+            if abs(dfz) < tol:
+                break
+
+            next_z = z - fz / dfz
+
+            if abs(next_z - z) < tol:
+                return next_z
+
+            z = next_z
+
+        return z
 
 def fix_symbol_list(symbols: List[SymbolLike], canvas: Optional[Canvas] = None) -> List[Symbol]:
     """A helper function to convert a list of symbol-like objects into a list of Symbol objects."""
