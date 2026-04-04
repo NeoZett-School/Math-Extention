@@ -2,7 +2,7 @@ from typing import (
     Union, Tuple, List, Dict, Optional, Callable, Generic, TypeVar, ClassVar, Self, Any
 )
 from collections import defaultdict
-import math
+import cmath
 
 VID = int
 
@@ -70,8 +70,8 @@ class Traceable:
 
     def __init__(self, func: Callable[[], Any], name: str, op: str = "CONST",
                  left: Any = None, right: Any = None) -> None:
-        self._func = func  # This is the "live" math
-        self.name = name   # This is the "written" math
+        self._func = func  # This is the "live" cmath
+        self.name = name   # This is the "written" cmath
         self.op = op
         self.left = left
         self.right = right
@@ -132,12 +132,12 @@ class Traceable:
             if self.left.op == "CONST":
                 a = float(self.left.name)
                 # We use our 'LOG' op here: ln(a)
-                ln_a = Traceable(lambda: math.log(a), f"ln({a})", op="LOG", left=self.left)
+                ln_a = Traceable(lambda: cmath.log(a), f"ln({a})", op="LOG", left=self.left)
                 return self * ln_a * self.right.diff(var)
 
             # Case 3: General Power Rule (f^g)' = f^g * (g' * ln(f) + g * f' / f)
             # This covers cases like x^x
-            ln_f = Traceable(lambda: math.log(self.left()), f"ln({self.left.name})", op="LOG", left=self.left)
+            ln_f = Traceable(lambda: cmath.log(self.left()), f"ln({self.left.name})", op="LOG", left=self.left)
             term1 = self.right.diff(var) * ln_f
             term2 = self.right * (self.left.diff(var) / self.left)
             return self * (term1 + term2)
@@ -147,17 +147,17 @@ class Traceable:
         
         if self.op == "SIN":
             # Chain Rule: sin(u)' = cos(u) * u'
-            cos_u = Traceable(lambda: math.cos(self.left()), f"cos({self.left.name})", op="COS", left=self.left)
+            cos_u = Traceable(lambda: cmath.cos(self.left()), f"cos({self.left.name})", op="COS", left=self.left)
             return cos_u * self.left.diff(var)
 
         if self.op == "COS":
             # Chain Rule: cos(u)' = -sin(u) * u'
-            sin_u = Traceable(lambda: math.sin(self.left()), f"sin({self.left.name})", op="SIN", left=self.left)
+            sin_u = Traceable(lambda: cmath.sin(self.left()), f"sin({self.left.name})", op="SIN", left=self.left)
             return Traceable.wrap(-1) * sin_u * self.left.diff(var)
 
         if self.op == "TAN":
             # Chain Rule: tan(u)' = sec^2(u) * u' = (1 / cos^2(u)) * u'
-            cos_u = Traceable(lambda: math.cos(self.left()), f"cos({self.left.name})", op="COS", left=self.left)
+            cos_u = Traceable(lambda: cmath.cos(self.left()), f"cos({self.left.name})", op="COS", left=self.left)
             return (Traceable.wrap(1) / (cos_u ** 2)) * self.left.diff(var)
         
         raise NotImplementedError(f"Diff for {self.op} not supported.")
@@ -246,27 +246,27 @@ class Traceable:
     @staticmethod
     def sin(expr: Any) -> Self:
         expr = Traceable.wrap(expr)
-        return Traceable(lambda: math.sin(expr()), f"sin({expr.name})", op="SIN", left=expr)
+        return Traceable(lambda: cmath.sin(expr()), f"sin({expr.name})", op="SIN", left=expr)
 
     @staticmethod
     def cos(expr: Any) -> Self:
         expr = Traceable.wrap(expr)
-        return Traceable(lambda: math.cos(expr()), f"cos({expr.name})", op="COS", left=expr)
+        return Traceable(lambda: cmath.cos(expr()), f"cos({expr.name})", op="COS", left=expr)
 
     @staticmethod
     def tan(expr: Any) -> Self:
         expr = Traceable.wrap(expr)
-        return Traceable(lambda: math.tan(expr()), f"tan({expr.name})", op="TAN", left=expr)
+        return Traceable(lambda: cmath.tan(expr()), f"tan({expr.name})", op="TAN", left=expr)
     
     @staticmethod
     def log(expr: Any, base: int = ...) -> Self:
         expr = Traceable.wrap(expr)
-        return Traceable(lambda: math.log(expr(), base), f"ln({expr.name})", op="LOG", left=expr)
+        return Traceable(lambda: cmath.log(expr(), base), f"ln({expr.name})", op="LOG", left=expr)
     
     @staticmethod
     def exp(expr: Any) -> Self:
         expr = Traceable.wrap(expr)
-        return Traceable(lambda: math.exp(expr()), f"exp({expr.name})", op="EXP", left=expr)
+        return Traceable(lambda: cmath.exp(expr()), f"exp({expr.name})", op="EXP", left=expr)
     
     def get_coefficients(self, var_name: str) -> List[float]:
         """
@@ -735,7 +735,7 @@ class RegressionLin:
         canvas = canvas if canvas is not None else Canvas.recent
         sym = get_symbol(canvas, symbol)
 
-        # This looks like math, but it's actually building the Traceable object!
+        # This looks like cmath, but it's actually building the Traceable object!
         # sym is converted to Traceable automatically by our __mul__ override
         expr = sym * slope + intercept
 
@@ -801,15 +801,15 @@ class RegressionExp:
     def __call__(self) -> Tuple[float, float]:
         """Returns (a, b) for the formula y = a * b^x."""
         # 1. Transform points to (x, ln(y))
-        log_points = [(x, math.log(y)) for x, y in self.points]
+        log_points = [(x, cmath.log(y)) for x, y in self.points]
         
         # 2. Use your existing Linear Regression on the transformed data
         lin_reg = RegressionLin(log_points)
         slope, intercept = lin_reg()
         
         # 3. Transform coefficients back
-        a = math.exp(intercept)
-        b = math.exp(slope)
+        a = cmath.exp(intercept)
+        b = cmath.exp(slope)
         return (a, b)
     
     def calculate(self) -> Tuple[float, float]:
@@ -844,7 +844,7 @@ class RegressionLog:
     def __call__(self) -> Tuple[float, float]:
         """Returns (a, b) for the formula y = a + b * ln(x)."""
         # 1. Transform points to (ln(x), y)
-        log_x_points = [(math.log(x), y) for x, y in self.points]
+        log_x_points = [(cmath.log(x), y) for x, y in self.points]
         
         # 2. Use Linear Regression: y = intercept + slope * ln(x)
         lin_reg = RegressionLin(log_x_points)
@@ -885,12 +885,12 @@ class RegressionPower:
     def __call__(self) -> Tuple[float, float]:
         """Returns (a, b) for y = a * x^b."""
         # Transform to (ln(x), ln(y))
-        log_log_points = [(math.log(x), math.log(y)) for x, y in self.points]
+        log_log_points = [(cmath.log(x), cmath.log(y)) for x, y in self.points]
         
         lin_reg = RegressionLin(log_log_points)
         slope, intercept = lin_reg()
         
-        a = math.exp(intercept)
+        a = cmath.exp(intercept)
         b = slope
         return (a, b)
     
@@ -1006,7 +1006,7 @@ class Solver:
         """Uses Newton's Method to find 'symbol' such that 'expr' == 'target'."""
         canvas = canvas if canvas is not None else Canvas.recent
     
-        # 1. Resolve 'expr' to its underlying math
+        # 1. Resolve 'expr' to its underlying cmath
         if isinstance(expr, Symbol):
             # If the symbol holds a Function or Traceable, solve THAT.
             # Otherwise, we are trying to solve 'x = target', which is trivial.
