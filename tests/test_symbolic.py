@@ -17,3 +17,4 @@ degree = traceable.get_degree(x)
 # We can also get the coefficients of the traceable object with respect to x.
 coefficients = traceable.get_coefficients(x)
 
+print(traceable.calculate())

@@ -391,7 +391,7 @@ class Symbol(tuple[str, int]):
 
     def __new__(cls, name: str, value: Any = 0, canvas: Optional[Canvas] = None) -> Self:
         """A class that represents a symbol in the canvas. It has a unique identifier (vid) and a name."""
-        canvas = canvas or Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
         self = super().__new__(cls, (name, canvas.create_value(value)))
         canvas._symbols[self[1]] = self
         self._canvas = canvas
@@ -477,7 +477,7 @@ class Expression(Generic[T1]):
     __slots__ = ("_canvas", "callable",)
 
     def __init__(self, func: Union[Callable[[], T1], Traceable], canvas: Optional[Canvas] = None) -> None:
-        self._canvas = canvas or Canvas.recent
+        self._canvas = canvas if canvas is not None else Canvas.recent
         self.callable = func
     
     @property
@@ -732,7 +732,7 @@ class RegressionLin:
     
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         slope, intercept = self()
-        canvas = canvas or Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
         sym = get_symbol(canvas, symbol)
 
         # This looks like math, but it's actually building the Traceable object!
@@ -779,7 +779,7 @@ class RegressionPoly:
 
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         coeffs = self()
-        canvas = canvas or Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
         sym = get_symbol(canvas, symbol)
         
         # Build the Traceable expression: a0 + a1*x + a2*x^2 ...
@@ -825,7 +825,7 @@ class RegressionExp:
 
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         a, b = self()
-        canvas = canvas or Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
         sym = get_symbol(canvas, symbol)
         
         # Formula: a * (b ** x)
@@ -866,7 +866,7 @@ class RegressionLog:
 
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         a, b = self()
-        canvas = canvas or Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
         sym = get_symbol(canvas, symbol)
 
         expr = Traceable.wrap(a) + (Traceable.wrap(b) * Traceable.log(sym))
@@ -907,7 +907,7 @@ class RegressionPower:
 
     def create_function(self, symbol: SymbolLike, canvas: Optional[Canvas] = None) -> Function[float, float]:
         a, b = self()
-        canvas = canvas or Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
         sym = get_symbol(canvas, symbol)
         
         # Formula: a * (x ** b)
@@ -962,7 +962,7 @@ class RegressionMultiple:
             raise ValueError(f"Expected {self.num_vars} symbols, got {len(symbols)}")
             
         coeffs = self()
-        canvas = canvas or Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
         
         # Start with the intercept b0
         expr = Traceable.wrap(coeffs[0])
@@ -1004,7 +1004,7 @@ class Solver:
               max_iter: int = 100,
               canvas: Optional[Canvas] = None) -> float:
         """Uses Newton's Method to find 'symbol' such that 'expr' == 'target'."""
-        canvas = canvas or Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
     
         # 1. Resolve 'expr' to its underlying math
         if isinstance(expr, Symbol):
@@ -1147,7 +1147,7 @@ class Solver:
 def fix_symbol_list(symbols: List[SymbolLike], canvas: Optional[Canvas] = None) -> List[Symbol]:
     """A helper function to convert a list of symbol-like objects into a list of Symbol objects."""
 
-    canvas = canvas or Canvas.recent
+    canvas = canvas if canvas is not None else Canvas.recent
     fixed_symbols = []
     for sym in symbols:
         if isinstance(sym, Symbol):
