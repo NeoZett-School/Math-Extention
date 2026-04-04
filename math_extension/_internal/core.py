@@ -334,6 +334,16 @@ class Traceable:
         )
     
     @classmethod
+    def sqrt(cls, expr: Any) -> Self:
+        expr = Traceable.wrap(expr)
+        return cls(
+            lambda: cmath.sqrt(expr()),
+            f"sqrt({expr.name})",
+            op="SQRT",
+            left=expr
+        )
+    
+    @classmethod
     def conjugate(cls, expr: Any) -> Self:
         expr = Traceable.wrap(expr)
         return cls(
