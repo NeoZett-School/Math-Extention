@@ -1,8 +1,8 @@
 # Smoke Test
 
-from math_extension import Canvas, Symbol, Solver, parse
+from math_extension import Canvas, Symbol, Solver, Traceable, Equation
 
 canvas = Canvas()
 x = Symbol('x', 2)
 
-print(parse('x**2 + 5 == x + 3').difference())
+expr = Traceable.parse("x^2 + 3*x + 2")

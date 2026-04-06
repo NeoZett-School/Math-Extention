@@ -113,14 +113,14 @@ class Traceable:
         return Traceable(lambda: other, str(other), op="CONST")
     
     @staticmethod
-    def parse(expr: Union[str, 'Traceable', 'Expression', Any]) -> 'Traceable':
+    def parse(expr: Union[str, 'Traceable', 'Expression', Any], canvas: Optional[Canvas] = None) -> 'Traceable':
         if isinstance(expr, Traceable):
             return expr
         if not isinstance(expr, str):
             return Traceable.wrap(expr)
         if "=" in expr:
             raise ValueError("Equations are not supported in Traceable parsing. Use the 'Equation' class instead.")
-        return parse(expr)
+        return parse(expr, canvas)
     
     # --- DERIVATION ---
     def diff(self, var: str) -> Self:
@@ -1462,14 +1462,14 @@ class Equation:
         self.right = Traceable.wrap(right)
 
     @staticmethod
-    def parse(expr: Union[str, 'Equation']) -> 'Equation':
+    def parse(expr: Union[str, 'Equation'], canvas: Optional[Canvas] = None) -> 'Equation':
         if isinstance(expr, Equation):
             return expr
         if not isinstance(expr, str):
             raise ValueError("Expression must be a string.")
         if not "=" in expr:
             raise ValueError("Expression must contain an '=' sign to be parsed as an equation.")
-        return parse(expr)
+        return parse(expr, canvas)
 
     def to_zero(self) -> Traceable:
         return self.left - self.right
