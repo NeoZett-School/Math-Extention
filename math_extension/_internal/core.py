@@ -1461,8 +1461,12 @@ class Equation:
         return Solver.solve_all(self.to_zero(), 0, symbol)
     
     def are_equal(self) -> bool:
-        # Check if both traceables calculate to the same value
+        """Checks if the left and right sides of the equation are equal. This is a simple check and may not be reliable for complex expressions due to floating-point precision issues, but it can be useful for quick validations."""
         return float(self.left()) == float(self.right())
+    
+    def difference(self) -> float:
+        """Returns the absolute difference between the left and right sides of the equation. Useful for checking how close we are to equality when solving."""
+        return abs(float(self.left()) - float(self.right()))
 
 def _string_to_traceable(expr: str, canvas: Optional[Canvas] = None) -> Traceable:
     """
