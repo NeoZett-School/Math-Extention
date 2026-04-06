@@ -1473,10 +1473,10 @@ class Equation:
     def to_zero(self) -> Traceable:
         return self.left - self.right
 
-    def solve(self, symbol: Symbol, guess: float = 1.0):
+    def solve(self, symbol: Symbol, guess: float = 1.0) -> float:
         return Solver.solve(self.to_zero(), 0, symbol, guess)
 
-    def solve_all(self, symbol: Symbol):
+    def solve_all(self, symbol: Symbol) -> List[float]:
         return Solver.solve_all(self.to_zero(), 0, symbol)
     
     def are_equal(self) -> bool:

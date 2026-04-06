@@ -1,10 +1,9 @@
 # Smoke Test
 
-from math_extension import Canvas, Symbol, Solver, Traceable, Equation
+from math_extension import Canvas, Symbol, Equation
 
-canvas = Canvas()
-x = Symbol('x', 0)
+canvas = Canvas(thread_safe = True)
+x = Symbol('x', 0, canvas=canvas)
 
-expr = Traceable.parse("x^2 + 3*x + 2")
-equa = Equation.parse(expr == Traceable.parse(2))
-print(equa.are_equal())
+equation = Equation.parse('42*x + 3 = 7', canvas=canvas)
+print(equation.solve_all(x))
