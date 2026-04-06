@@ -1459,6 +1459,10 @@ class Equation:
 
     def solve_all(self, symbol: Symbol):
         return Solver.solve_all(self.to_zero(), 0, symbol)
+    
+    def are_equal(self) -> bool:
+        # Check if both traceables calculate to the same value
+        return float(self.left()) == float(self.right())
 
 def _string_to_traceable(expr: str, canvas: Optional[Canvas] = None) -> Traceable:
     """
