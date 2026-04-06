@@ -520,6 +520,23 @@ class Traceable:
     
     def __neg__(self) -> Self:
         return Traceable.wrap(-1) * self
+    
+    def __eq__(self, other: Any) -> Union[bool, "Equation"]:
+        if isinstance(other, Traceable):
+            return Equation(self, other)
+        return self() == other
+    
+    def __ge__(self, other: Any) -> bool:
+        return self() >= (Traceable.wrap(other)())
+    
+    def __le__(self, other: Any) -> bool:
+        return self() <= (Traceable.wrap(other)())
+    
+    def __gt__(self, other: Any) -> bool:
+        return self() > (Traceable.wrap(other)())
+    
+    def __lt__(self, other: Any) -> bool:
+        return self() < (Traceable.wrap(other)())
 
     def __repr__(self) -> str:
         return self.name
@@ -588,6 +605,23 @@ class Symbol(tuple[str, int]):
     
     def __neg__(self) -> Traceable:
         return -Traceable.wrap(self)
+    
+    def __eq__(self, val: Any) -> Union[bool, "Equation"]:
+        if isinstance(val, Traceable):
+            return Equation(Traceable.wrap(self), val)
+        return self.value == val
+    
+    def __ge__(self, other: Any) -> bool:
+        return self.value >= (Traceable.wrap(other)())
+
+    def __le__(self, other: Any) -> bool:
+        return self.value <= (Traceable.wrap(other)())
+    
+    def __gt__(self, other: Any) -> bool:
+        return self.value > (Traceable.wrap(other)())
+    
+    def __lt__(self, other: Any) -> bool:
+        return self.value < (Traceable.wrap(other)())
     
     def create_reference(self) -> "Reference":
         return Reference(self.name, self._canvas[self[1]])
@@ -1466,12 +1500,15 @@ def _string_to_traceable(expr: str, canvas: Optional[Canvas] = None) -> Traceabl
     except SyntaxError as e:
         raise ValueError(f"Invalid mathematical syntax: {e}")
 
-def parse(expr: Union[str, Traceable, Symbol, Expression, Any], canvas: Optional[Canvas] = None) -> Union[Traceable, Equation]:
+def parse(expr: Union[str, Traceable, Symbol, Expression, Equation, Any], canvas: Optional[Canvas] = None) -> Union[Traceable, Equation]:
     """A simple parser to convert a string like '2*x + 3 = 8' into an equation or traceable."""
 
     canvas = canvas if canvas is not None else Canvas.recent
 
     if isinstance(expr, Traceable):
+        return expr
+    
+    if isinstance(expr, Equation):
         return expr
     
     if not isinstance(expr, str):
