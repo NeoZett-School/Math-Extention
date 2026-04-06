@@ -10,6 +10,14 @@ VID = int
 T = TypeVar("T")
 T1 = TypeVar("T1")
 
+OPERATOR_MAPPING = {
+    "+": lambda l, r: l + r,
+    "-": lambda l, r: l - r,
+    "*": lambda l, r: l * r,
+    "/": lambda l, r: l / r,
+    "**": lambda l, r: l ** r
+}
+
 # Complex numbers, helper function to choose between real and complex math functions based on input type.
 def _smart_math_func(real_func: Callable, complex_func: Callable, x: Any, *args: Any, **kwargs: Any) -> Any:
     return complex_func(x, *args, **kwargs) if isinstance(x, complex) else real_func(x, *args, **kwargs)
@@ -294,31 +302,36 @@ class Traceable:
         return [row[0] for row in coeffs.data]
     
     def simplify(self) -> Self:
+        # Base cases: constants and variables cannot be simplified further
         if self.op in ("CONST", "VAR"):
             return self
 
+        # Recursively simplify the left and right branches first
         left = self.left.simplify() if isinstance(self.left, Traceable) else self.left
         right = self.right.simplify() if isinstance(self.right, Traceable) else self.right
 
-        # Addition
+        # --- NEW: Constant Folding ---
+        # If both sides are constants, we can compute the result immediately
+        if left.op == "CONST" and right.op == "CONST":
+            # Create a temporary Traceable to perform the math and wrap the result
+            # This handles (5 + 5) -> 10 or (2 * 5) -> 10
+            try:
+                # We call them to get their raw numeric values
+                val = OPERATOR_MAPPING[self.op](float(left.name), float(right.name))
+                return Traceable.wrap(val)
+            except (KeyError, ValueError, ZeroDivisionError):
+                pass # Fall back to algebraic simplification if math fails
+
+        # --- Algebraic Simplifications (Existing + Improved) ---
         if self.op == "+":
-            if left.op == "CONST" and float(left.name) == 0:
-                return right
-            if right.op == "CONST" and float(right.name) == 0:
-                return left
-            if left.name == right.name:
-                return Traceable.wrap(2) * left
-            return left + right
+            if left.op == "CONST" and float(left.name) == 0: return right
+            if right.op == "CONST" and float(right.name) == 0: return left
+            if left.name == right.name: return Traceable.wrap(2) * left
 
-        # Subtraction
         if self.op == "-":
-            if right.op == "CONST" and float(right.name) == 0:
-                return left
-            if left.name == right.name:
-                return Traceable.wrap(0)
-            return left - right
+            if right.op == "CONST" and float(right.name) == 0: return left
+            if left.name == right.name: return Traceable.wrap(0)
 
-        # Multiplication
         if self.op == "*":
             if left.op == "CONST":
                 val = float(left.name)
@@ -328,29 +341,15 @@ class Traceable:
                 val = float(right.name)
                 if val == 0: return right
                 if val == 1: return left
-            return left * right
 
-        # Division
         if self.op == "/":
-            if right.op == "CONST" and float(right.name) == 1:
-                return left
-            return left / right
-
-        # Power
-        if self.op == "**":
             if right.op == "CONST":
                 val = float(right.name)
                 if val == 1: return left
-                if val == 0: return Traceable.wrap(1)
-            return left ** right
+                if val == 0: raise ZeroDivisionError("Cannot simplify division by zero.")
 
-        return Traceable(
-            self._func,
-            self.name,
-            self.op,
-            left,
-            right
-        )
+        # Return the new combined Traceable if no simplification was possible
+        return Traceable(self._func, self.name, self.op, left, right)
     
     @classmethod
     def sin(cls, expr: Any) -> Self:
