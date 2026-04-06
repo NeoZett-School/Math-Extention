@@ -1523,7 +1523,7 @@ def parse(expr: Union[str, Traceable, Symbol, Expression, Equation, Any], canvas
         return Traceable.wrap(expr)
 
     if '=' in expr:
-        left_str, right_str = expr.split('=')
+        left_str, *_, right_str = expr.split('=')
         left_expr = _string_to_traceable(left_str.strip(), canvas)
         right_expr = _string_to_traceable(right_str.strip(), canvas)
         return Equation(left_expr, right_expr)
