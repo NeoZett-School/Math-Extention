@@ -1,15 +1,8 @@
 # Smoke Test
 
-from math_extension import Canvas, Symbol, Solver
+from math_extension import Canvas, Symbol, Solver, parse
 
 canvas = Canvas()
-x = Symbol('x')
-i = Symbol('i', 1j)
+x = Symbol('x', 2)
 
-expr = x**2 + 1 + 5 + 0
-
-print(expr.simplify())
-
-root = Solver.solve_complex(expr, 0, x, 1j)
-
-print(f"Root: {root}")
+print(parse('x**2+5').calculate())

@@ -1426,5 +1426,61 @@ class Equation:
     def solve_all(self, symbol: Symbol):
         return Solver.solve_all(self.to_zero(), 0, symbol)
 
-def parse(expr: str) -> Union[Traceable, Equation]:
+def _string_to_traceable(expr: str, canvas: Optional[Canvas] = None) -> Traceable:
+    """
+    Converts a string expression into a Traceable object by evaluating 
+    it within a context of known math functions and canvas symbols.
+    """
+
+    if canvas is None:
+        raise RuntimeError("Due to the complexity of the internal method '_string_to_traceable' and its reliance on the canvas context, you must provide a canvas instance when calling this function. This is to ensure that all symbols and functions are correctly resolved within the canvas environment.")
+    
+    # 1. Define the supported mathematical functions mapping to Traceable classmethods
+    operators = {
+        'sin': Traceable.sin,
+        'cos': Traceable.cos,
+        'tan': Traceable.tan,
+        'ln': Traceable.log,
+        'log': Traceable.log,
+        'exp': Traceable.exp,
+        'sqrt': Traceable.sqrt,
+        'abs': Traceable.abs,
+        'conj': Traceable.conjugate,
+    }
+
+    # 2. Map all symbols currently in the canvas to their names
+    # This allows the evaluator to see 'x' and treat it as a Traceable(x)
+    context = {**operators}
+    for symbol in canvas.symbols:
+        context[symbol.name] = Traceable.wrap(symbol)
+
+    # 3. Handle potential syntax differences (like ^ for power)
+    clean_expr = expr.replace('^', '**')
+
+    try:
+        # Use eval with restricted globals/locals for safety and functionality
+        result = eval(clean_expr, {"__builtins__": {}}, context)
+        return Traceable.wrap(result)
+    except NameError as e:
+        raise ValueError(f"Unknown symbol or function in expression: {e}")
+    except SyntaxError as e:
+        raise ValueError(f"Invalid mathematical syntax: {e}")
+
+def parse(expr: Union[str, Traceable, Symbol, Expression, Any], canvas: Optional[Canvas] = None) -> Union[Traceable, Equation]:
     """A simple parser to convert a string like '2*x + 3 = 8' into an equation or traceable."""
+
+    canvas = canvas if canvas is not None else Canvas.recent
+
+    if isinstance(expr, Traceable):
+        return expr
+    
+    if not isinstance(expr, str):
+        return Traceable.wrap(expr)
+
+    if '=' in expr:
+        left_str, right_str = expr.split('=')
+        left_expr = _string_to_traceable(left_str.strip(), canvas)
+        right_expr = _string_to_traceable(right_str.strip(), canvas)
+        return Equation(left_expr, right_expr)
+    else:
+        return _string_to_traceable(expr.strip(), canvas)
