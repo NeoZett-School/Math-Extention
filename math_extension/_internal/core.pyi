@@ -1,6 +1,6 @@
 from typing import (
     Union, Tuple, List, Dict, 
-    Optional, Callable, Generic, 
+    Optional, Literal, Callable, Generic, 
     TypeVar, ClassVar, Self, Any
 )
 from collections import defaultdict
@@ -45,7 +45,14 @@ class Traceable:
     def get_degree(self, var: str) -> int: ...
     def get_coefficients(self, var_name: str, canvas: Optional[Canvas] = None) -> List[float]: ...
     def simplify(self) -> Self: ...
-    def limit(self, var: str, to: float, direction: str = "both", max_steps: int = 8, canvas: Optional[Canvas] = None) -> float: ...
+    def limit(
+        self,
+        var: str,
+        to: float,
+        direction: Literal["left", "right", "both"] = "both",
+        max_steps: int = 10,
+        canvas: Optional[Canvas] = None
+    ) -> float: ...
     @classmethod
     def sin(cls, expr: Any) -> Self: ...
     @classmethod

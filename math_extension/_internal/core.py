@@ -358,7 +358,14 @@ class Traceable:
         # Return the new combined Traceable if no simplification was possible
         return Traceable(self._func, self.name, self.op, left, right)
     
-    def limit(self, var: str, to: float, direction: str = "both", max_steps: int = 8, canvas: Optional[Canvas] = None) -> float:
+    def limit(
+        self,
+        var: str,
+        to: float,
+        direction: str = "both",
+        max_steps: int = 10,
+        canvas: Optional[Canvas] = None
+    ) -> float:
         canvas = canvas if canvas is not None else Canvas.recent
         sym = canvas.get_symbol(canvas.find_symbol(var))
         if sym is None:
@@ -366,59 +373,118 @@ class Traceable:
 
         old = sym.value
 
+        def _safe_eval(expr: "Traceable", xval: Number):
+            sym.value = xval
+            return expr()
+
         try:
             expr = self.simplify()
 
-            for _ in range(max_steps):
-                # 1) direct substitution
-                sym.value = to
-                try:
-                    val = expr()
-                    if not (math.isnan(val) or math.isinf(val)):
-                        return val
-                except:
-                    pass
+            # -------------------------
+            # 1) exact subtree rules
+            # -------------------------
+            if expr.op == "CONST":
+                return float(expr.name)
 
-                # 2) L'Hôpital for 0/0 or inf/inf
-                if expr.op == "/":
-                    num = expr.left
-                    den = expr.right
+            if expr.op == "VAR":
+                return to if expr.name == var else expr()
 
-                    sym.value = to
-                    try:
-                        nval = num()
-                        dval = den()
-                    except:
-                        break
+            if expr.op == "+":
+                return expr.left.limit(var, to, direction, max_steps, canvas) + \
+                    expr.right.limit(var, to, direction, max_steps, canvas)
 
-                    zero_zero = abs(nval) < 1e-12 and abs(dval) < 1e-12
-                    inf_inf = math.isinf(nval) and math.isinf(dval)
+            if expr.op == "-":
+                return expr.left.limit(var, to, direction, max_steps, canvas) - \
+                    expr.right.limit(var, to, direction, max_steps, canvas)
+
+            if expr.op == "*":
+                return expr.left.limit(var, to, direction, max_steps, canvas) * \
+                    expr.right.limit(var, to, direction, max_steps, canvas)
+
+            # -------------------------
+            # 2) quotient rules
+            # -------------------------
+            if expr.op == "/":
+                num = expr.left
+                den = expr.right
+
+                # infinity rational rule
+                if math.isinf(to):
+                    ld = num.get_degree(var)
+                    rd = den.get_degree(var)
+
+                    if ld < rd:
+                        return 0.0
+                    elif ld == rd:
+                        a = num.get_coefficients(var)[-1]
+                        b = den.get_coefficients(var)[-1]
+                        return a / b
+
+                for _ in range(max_steps):
+                    nlim = num.limit(var, to, direction, max_steps, canvas)
+                    dlim = den.limit(var, to, direction, max_steps, canvas)
+
+                    zero_zero = abs(nlim) < 1e-12 and abs(dlim) < 1e-12
+                    inf_inf = math.isinf(nlim) and math.isinf(dlim)
 
                     if zero_zero or inf_inf:
-                        expr = (num.diff(var) / den.diff(var)).simplify()
+                        num = num.diff(var).simplify()
+                        den = den.diff(var).simplify()
                         continue
 
-                # 3) polynomial cancellation shortcut
-                expr = expr.simplify()
+                    return nlim / dlim
 
-                break
+            # -------------------------
+            # 3) power rules
+            # -------------------------
+            if expr.op == "**":
+                base_lim = expr.left.limit(var, to, direction, max_steps, canvas)
+                exp_lim = expr.right.limit(var, to, direction, max_steps, canvas)
 
-            # 4) numeric one-sided fallback
+                # classic indeterminate powers
+                if base_lim == 1 and math.isinf(exp_lim):
+                    transformed = Traceable.exp(
+                        expr.right * Traceable.log(expr.left)
+                    )
+                    return transformed.limit(var, to, direction, max_steps, canvas)
+
+                return base_lim ** exp_lim
+
+            # -------------------------
+            # 4) special trig limits
+            # -------------------------
+            if expr.op == "/" and expr.left.op == "SIN":
+                if expr.left.left.name == var and expr.right.name == var and to == 0:
+                    return 1.0
+
+            # -------------------------
+            # 5) direct substitution
+            # -------------------------
+            try:
+                val = _safe_eval(expr, to)
+                if not (math.isnan(val) or math.isinf(val)):
+                    return val
+            except:
+                pass
+
+            # -------------------------
+            # 6) one-sided numeric fallback
+            # -------------------------
             eps = 1e-7
+
             if direction == "left":
-                sym.value = to - eps
-                return expr()
-            elif direction == "right":
-                sym.value = to + eps
-                return expr()
-            else:
-                sym.value = to - eps
-                lv = expr()
-                sym.value = to + eps
-                rv = expr()
-                if abs(lv - rv) < 1e-5:
-                    return (lv + rv) / 2
-                raise ValueError("Two-sided limit does not exist")
+                return _safe_eval(expr, to - eps)
+
+            if direction == "right":
+                return _safe_eval(expr, to + eps)
+
+            lv = _safe_eval(expr, to - eps)
+            rv = _safe_eval(expr, to + eps)
+
+            if abs(lv - rv) < 1e-5:
+                return (lv + rv) / 2
+
+            raise ValueError("Two-sided limit does not exist")
 
         finally:
             sym.value = old
