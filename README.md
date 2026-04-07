@@ -104,7 +104,7 @@ The `Matrix` class handles the heavy lifting for regressions and system solving.
 - [x] Automatic Complexity (Degree) Detection.
 - [x] Multiple Linear Regression.
 - [x] Imaginary Numbers (further development is in progress...)
-- [ ] String Parser (LaTeX String, presumably)
+- [x] String Parser (LaTeX String, presumably)
 - [ ] Unit Tests
 - [ ] LaTeX String Exporting for documentation.
 - [ ] Residual Analysis Plotting.
