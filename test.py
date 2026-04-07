@@ -1,9 +1,10 @@
 # Smoke Test
 
-from math_extension import Canvas, Symbol, Equation
+from math_extension import Canvas, Symbol, Function
 
-canvas = Canvas(thread_safe = True)
-x = Symbol('x', 0, canvas=canvas)
+canvas = Canvas()
+x = Symbol("x", canvas=canvas)
 
-equation = Equation.parse('42*x + 3 = 7', canvas=canvas)
-print(equation.solve_all(x))
+f = Function(x, (x**2 - 1) / (x - 1))
+
+print(f.callable.limit("x", 1))

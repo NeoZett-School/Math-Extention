@@ -1,5 +1,7 @@
 from typing import (
-    Union, Tuple, List, Dict, Optional, Callable, Generic, TypeVar, ClassVar, Self, Any
+    Union, Tuple, List, Dict, 
+    Optional, Callable, Generic, 
+    TypeVar, ClassVar, Self, Any
 )
 from collections import defaultdict
 import cmath
@@ -95,6 +97,8 @@ class Traceable:
     def calculate(self) -> Any:
         """A helper method to explicitly calculate the value of the expression. It is equivalent to calling the object itself."""
         return self()
+    
+    evaluate = calculate
 
     @staticmethod
     def wrap(other: Any) -> Self:
@@ -266,7 +270,7 @@ class Traceable:
         
         return 1 # Fallback for unknown ops like LOG/EXP/etc.
     
-    def get_coefficients(self, var_name: str) -> List[float]:
+    def get_coefficients(self, var_name: str, canvas: Optional[Canvas] = None) -> List[float]:
         """
         Uses a system of linear equations to find coefficients for a polynomial.
         If f(x) = a2*x^2 + a1*x + a0, it returns [a0, a1, a2].
@@ -279,8 +283,11 @@ class Traceable:
         A_data = []
         B_data = []
         
-        canvas = Canvas.recent
+        canvas = canvas if canvas is not None else Canvas.recent
         sym = canvas.get_symbol(canvas.find_symbol(var_name))
+        if sym is None:
+            raise ValueError(f"Unknown variable {var_name}")
+        
         original_val = sym.value
         
         for x_val in range(deg + 1):
@@ -350,6 +357,71 @@ class Traceable:
 
         # Return the new combined Traceable if no simplification was possible
         return Traceable(self._func, self.name, self.op, left, right)
+    
+    def limit(self, var: str, to: float, direction: str = "both", max_steps: int = 8, canvas: Optional[Canvas] = None) -> float:
+        canvas = canvas if canvas is not None else Canvas.recent
+        sym = canvas.get_symbol(canvas.find_symbol(var))
+        if sym is None:
+            raise ValueError(f"Unknown variable {var}")
+
+        old = sym.value
+
+        try:
+            expr = self.simplify()
+
+            for _ in range(max_steps):
+                # 1) direct substitution
+                sym.value = to
+                try:
+                    val = expr()
+                    if not (math.isnan(val) or math.isinf(val)):
+                        return val
+                except:
+                    pass
+
+                # 2) L'Hôpital for 0/0 or inf/inf
+                if expr.op == "/":
+                    num = expr.left
+                    den = expr.right
+
+                    sym.value = to
+                    try:
+                        nval = num()
+                        dval = den()
+                    except:
+                        break
+
+                    zero_zero = abs(nval) < 1e-12 and abs(dval) < 1e-12
+                    inf_inf = math.isinf(nval) and math.isinf(dval)
+
+                    if zero_zero or inf_inf:
+                        expr = (num.diff(var) / den.diff(var)).simplify()
+                        continue
+
+                # 3) polynomial cancellation shortcut
+                expr = expr.simplify()
+
+                break
+
+            # 4) numeric one-sided fallback
+            eps = 1e-7
+            if direction == "left":
+                sym.value = to - eps
+                return expr()
+            elif direction == "right":
+                sym.value = to + eps
+                return expr()
+            else:
+                sym.value = to - eps
+                lv = expr()
+                sym.value = to + eps
+                rv = expr()
+                if abs(lv - rv) < 1e-5:
+                    return (lv + rv) / 2
+                raise ValueError("Two-sided limit does not exist")
+
+        finally:
+            sym.value = old
     
     @classmethod
     def sin(cls, expr: Any) -> Self:
@@ -673,6 +745,8 @@ class Expression(Generic[T1]):
         """A helper method to explicitly calculate the value of the expression. It is equivalent to calling the object itself."""
         return self.callable()
     
+    evaluate = calculate
+    
     def __call__(self) -> T1:
         return self.callable()
 
@@ -707,6 +781,8 @@ class Function(Generic[T, T1], Expression[T1]):
     def calculate(self, value: T) -> T1:
         self.symbol.value = value
         return self.callable()
+    
+    evaluate = calculate
     
     def __call__(self, value: T) -> T1:
         self.symbol.value = value
@@ -908,6 +984,8 @@ class RegressionLin:
     def calculate(self) -> Tuple[float, float]:
         return self()
     
+    evaluate = calculate
+    
     def r_squared(self) -> float:
         coeffs = self()
         def model(x):
@@ -955,6 +1033,8 @@ class RegressionPoly:
     def calculate(self) -> Tuple[float, float]:
         return self()
     
+    evaluate = calculate
+    
     def r_squared(self) -> float:
         coeffs = self()
         def model(x):
@@ -1001,6 +1081,8 @@ class RegressionExp:
     def calculate(self) -> Tuple[float, float]:
         return self()
     
+    evaluate = calculate
+    
     def r_squared(self) -> float:
         coeffs = self()
         def model(x):
@@ -1042,6 +1124,8 @@ class RegressionLog:
     def calculate(self) -> Tuple[float, float]:
         return self()
     
+    evaluate = calculate
+    
     def r_squared(self) -> float:
         coeffs = self()
         def model(x):
@@ -1082,6 +1166,8 @@ class RegressionPower:
     
     def calculate(self) -> Tuple[float, float]:
         return self()
+    
+    evaluate = calculate
     
     def r_squared(self) -> float:
         coeffs = self()
@@ -1132,8 +1218,10 @@ class RegressionMultiple:
         coeffs = A.solve(B_vec)
         return [row[0] for row in coeffs.data]
     
-    def calculate(self) -> Tuple[float, float]:
+    def calculate(self) -> List[float]:
         return self()
+    
+    evaluate = calculate
     
     def r_squared(self) -> float:
         coeffs = self()
@@ -1164,10 +1252,10 @@ class Solver:
     """A class to solve for a variable in an expression given a target value."""
 
     @staticmethod
-    def get_auto_range(expr: Traceable, symbol: Symbol) -> Tuple[float, float]:
+    def get_auto_range(expr: Traceable, symbol: Symbol, canvas: Optional[Canvas] = None) -> Tuple[float, float]:
         """Calculates a safe search range using Cauchy's Bound."""
         try:
-            coeffs = expr.get_coefficients(symbol.name)
+            coeffs = expr.get_coefficients(symbol.name, canvas)
             if len(coeffs) < 2: return (-10, 10)
             
             an = abs(coeffs[-1]) # Leading coefficient
@@ -1246,12 +1334,13 @@ class Solver:
     @staticmethod
     def find_extrema(expr: Union[Traceable, Function, SymbolLike], 
                      symbol: Symbol, 
-                     search_range: Optional[Tuple[float, float]] = None) -> List[float]:
+                     search_range: Optional[Tuple[float, float]] = None,
+                     canvas: Optional[Canvas] = None) -> List[float]:
         
         t_expr = Traceable.wrap(expr)
 
         if search_range is None:
-            search_range = Solver.get_auto_range(t_expr, symbol)
+            search_range = Solver.get_auto_range(t_expr, symbol, canvas)
 
         deriv = t_expr.diff(symbol.name)
         
@@ -1290,17 +1379,18 @@ class Solver:
     def solve_all(expr: Union[Traceable, Function, SymbolLike], 
                   target: float, 
                   symbol: Symbol, 
-                  search_range: Optional[Tuple[float, float]] = None) -> List[float]:
+                  search_range: Optional[Tuple[float, float]] = None,
+                  canvas: Optional[Canvas] = None) -> List[float]:
         """
         Partition the search range using extrema to find all real roots.
         """
         t_expr = Traceable.wrap(expr)
 
         if search_range is None:
-            search_range = Solver.get_auto_range(t_expr, symbol)
+            search_range = Solver.get_auto_range(t_expr, symbol, canvas)
         
         # 1. Find the "wiggles" (extrema)
-        extrema = Solver.find_extrema(t_expr, symbol, search_range)
+        extrema = Solver.find_extrema(t_expr, symbol, search_range, canvas)
         
         # 2. Create partitions: [start, ext1, ext2, ..., end]
         partitions = [search_range[0]] + extrema + [search_range[1]]
@@ -1319,7 +1409,7 @@ class Solver:
             if float(y_left) * float(y_right) <= 0:
                 # Use midpoint as the starting guess for Newton's Method
                 guess = (x_left + x_right) / 2
-                root = Solver.solve(t_expr, target, symbol, guess=guess)
+                root = Solver.solve(t_expr, target, symbol, guess=guess, canvas=canvas)
                 
                 # Verify and add unique root
                 if not any(abs(root - r) < 1e-4 for r in roots):
